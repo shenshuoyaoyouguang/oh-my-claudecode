@@ -214,23 +214,23 @@ describe('HUD stdin token usage helpers', () => {
 });
 
 describe('HUD token usage rendering', () => {
-  it('formats last-request token usage as plain ASCII input/output counts', () => {
-    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1530/o987');
+  it('formats last-request token usage as a compact total', () => {
+    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok 2.5k');
   });
 
-  it('includes reasoning and reliable session totals when available', () => {
+  it('shows approximate session totals when available', () => {
     expect(
       renderTokenUsage(
         { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
         8765,
       ),
-    ).toBe('tok:i1530/o987 r321 s8765');
+    ).toBe('tok 2.5k · total ~8.7k');
   });
 
-  it('uses ASCII unit suffixes when requested', () => {
+  it('uses ASCII separators when requested', () => {
     expect(
       renderTokenUsage({ inputTokens: 37600, outputTokens: 109 }, 37709, true),
-    ).toBe('tok:i3.76w/o109 s3.77w');
+    ).toBe('tok 37.7k | total ~37.7k');
   });
 
   it('returns null when no last-request token usage is available', () => {

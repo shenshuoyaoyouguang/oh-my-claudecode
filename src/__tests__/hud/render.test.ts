@@ -2,7 +2,40 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { limitOutputLines } from '../../hud/render.js';
 import { render } from '../../hud/render.js';
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, type HudRenderContext, type HudConfig } from '../../hud/types.js';
+import { getTerminalCapabilities, type TerminalCapabilities } from '../../hud/terminal-capabilities.js';
 import { stringWidth } from '../../utils/string-width.js';
+
+vi.mock('../../hud/terminal-capabilities.js', async () => {
+  const actual = await vi.importActual<typeof import('../../hud/terminal-capabilities.js')>('../../hud/terminal-capabilities.js');
+  return {
+    ...actual,
+    getTerminalCapabilities: vi.fn(() => ({
+      terminalType: 'vscode',
+      supportsAnsi: true,
+      supports256Color: true,
+      supportsTrueColor: true,
+      supportsUnicode: true,
+      supportsBoxDrawing: true,
+      supportsEmoji: true,
+      terminalWidth: 120,
+      isWindows: false,
+      recommendedProgressBarStyle: 'solid',
+    })),
+  };
+});
+
+const defaultTerminalCapabilities: TerminalCapabilities = {
+  terminalType: 'vscode',
+  supportsAnsi: true,
+  supports256Color: true,
+  supportsTrueColor: true,
+  supportsUnicode: true,
+  supportsBoxDrawing: true,
+  supportsEmoji: true,
+  terminalWidth: 120,
+  isWindows: false,
+  recommendedProgressBarStyle: 'solid',
+};
 
 // Mock git elements
 vi.mock('../../hud/elements/git.js', () => ({
@@ -230,6 +263,7 @@ describe('gitInfoPosition configuration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getTerminalCapabilities).mockReturnValue(defaultTerminalCapabilities);
   });
 
   describe('default value', () => {
@@ -533,12 +567,34 @@ describe('token usage rendering', () => {
   it('shows last-request token usage when enabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(true));
 
-    expect(result).toContain('tok:i1.3k/o340 r120 s6.6k');
+    expect(result).toContain('tok 1.5k · total ~6.5k');
+  });
+
+  it('renders ASCII token summaries when terminal lacks Unicode support', async () => {
+    vi.mocked(getTerminalCapabilities).mockReturnValue({
+      ...defaultTerminalCapabilities,
+      supportsUnicode: false,
+      supportsBoxDrawing: false,
+      supportsEmoji: false,
+      recommendedProgressBarStyle: 'ascii',
+    });
+
+    const result = await render(
+      {
+        ...createTokenContext(),
+        lastRequestTokenUsage: { inputTokens: 37600, outputTokens: 109, reasoningTokens: 120 },
+        sessionTotalTokens: 37709,
+      },
+      createTokenConfig(true),
+    );
+
+    expect(result).toContain('tok 37.7k | total ~37.7k');
   });
 
   it('omits last-request token usage when explicitly disabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(false));
 
-    expect(result).not.toContain('tok:');
+    expect(result).not.toContain('tok ');
+    expect(result).not.toContain('total ~');
   });
 });

@@ -115,7 +115,7 @@ export function getCurrentRequestTokenUsage(stdin: StatuslineStdin): LastRequest
   }
 
   const inputTokens = Math.max(0, Math.round(usage.input_tokens));
-  const outputTokens = Math.max(0, Math.round(usage.output_tokens));
+  const outputTokens = Math.max(0, Math.round(usage.output_tokens ?? 0));
 
   if (inputTokens === 0 && outputTokens === 0) {
     return null;

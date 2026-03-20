@@ -164,6 +164,7 @@ describe('HUD watch mode initialization', () => {
       currentRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
       transcriptData: {
         lastRequestTokenUsage: { inputTokens: 120, outputTokens: 45 },
+        sessionTotalTokens: 6590,
       },
     });
 
@@ -172,6 +173,7 @@ describe('HUD watch mode initialization', () => {
     expect(renderHud).toHaveBeenCalledTimes(1);
     expect(renderHud.mock.calls[0]?.[0]).toMatchObject({
       lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
+      sessionTotalTokens: null,
     });
   });
 
@@ -196,6 +198,7 @@ describe('HUD watch mode initialization', () => {
       currentRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
       transcriptData: {
         lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+        sessionTotalTokens: 8765,
       },
     });
 
@@ -204,6 +207,7 @@ describe('HUD watch mode initialization', () => {
     expect(renderHud).toHaveBeenCalledTimes(1);
     expect(renderHud.mock.calls[0]?.[0]).toMatchObject({
       lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+      sessionTotalTokens: 8765,
     });
   });
 });

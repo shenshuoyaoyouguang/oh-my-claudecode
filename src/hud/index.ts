@@ -253,13 +253,18 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
 
     const currentRequestTokenUsage = getCurrentRequestTokenUsage(stdin);
     const transcriptTokenUsage = transcriptData.lastRequestTokenUsage ?? null;
+    const liveUsageMatchesTranscript = currentRequestTokenUsage != null
+      && transcriptTokenUsage != null
+      && transcriptTokenUsage.inputTokens === currentRequestTokenUsage.inputTokens
+      && transcriptTokenUsage.outputTokens === currentRequestTokenUsage.outputTokens;
     const resolvedLastRequestTokenUsage = currentRequestTokenUsage == null
       ? transcriptTokenUsage
-      : transcriptTokenUsage != null
-        && transcriptTokenUsage.inputTokens === currentRequestTokenUsage.inputTokens
-        && transcriptTokenUsage.outputTokens === currentRequestTokenUsage.outputTokens
+      : liveUsageMatchesTranscript
         ? transcriptTokenUsage
         : currentRequestTokenUsage;
+    const resolvedSessionTotalTokens = currentRequestTokenUsage != null && !liveUsageMatchesTranscript
+      ? null
+      : transcriptData.sessionTotalTokens ?? null;
 
     // Build render context
     const context: HudRenderContext = {
@@ -284,7 +289,7 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
         getContextPercent(stdin),
       ),
       lastRequestTokenUsage: resolvedLastRequestTokenUsage,
-      sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
+      sessionTotalTokens: resolvedSessionTotalTokens,
       omcVersion,
       updateAvailable,
       toolCallCount: transcriptData.toolCallCount,
