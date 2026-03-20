@@ -6,7 +6,7 @@
  * Receives stdin JSON from Claude Code and outputs formatted statusline.
  */
 
-import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getModelName } from "./stdin.js";
+import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getCurrentRequestTokenUsage, getModelName } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import {
   readHudState,
@@ -251,6 +251,16 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       ? await refreshMissionBoardState(cwd, config.missionBoard)
       : null;
 
+    const currentRequestTokenUsage = getCurrentRequestTokenUsage(stdin);
+    const transcriptTokenUsage = transcriptData.lastRequestTokenUsage ?? null;
+    const resolvedLastRequestTokenUsage = currentRequestTokenUsage == null
+      ? transcriptTokenUsage
+      : transcriptTokenUsage != null
+        && transcriptTokenUsage.inputTokens === currentRequestTokenUsage.inputTokens
+        && transcriptTokenUsage.outputTokens === currentRequestTokenUsage.outputTokens
+        ? transcriptTokenUsage
+        : currentRequestTokenUsage;
+
     // Build render context
     const context: HudRenderContext = {
       contextPercent: getContextPercent(stdin),
@@ -273,7 +283,7 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
         sessionStart,
         getContextPercent(stdin),
       ),
-      lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
+      lastRequestTokenUsage: resolvedLastRequestTokenUsage,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
       omcVersion,
       updateAvailable,

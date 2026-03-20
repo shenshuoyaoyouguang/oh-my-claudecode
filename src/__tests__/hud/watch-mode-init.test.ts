@@ -37,34 +37,44 @@ const fakeConfig = {
 describe('HUD watch mode initialization', () => {
   const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
   let initializeHUDState: ReturnType<typeof vi.fn>;
+  let renderHud: ReturnType<typeof vi.fn>;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
-  async function importHudModule() {
+  async function importHudModule(options?: {
+    stdin?: typeof fakeStdin;
+    currentRequestTokenUsage?: { inputTokens: number; outputTokens: number } | null;
+    transcriptData?: Record<string, unknown>;
+  }) {
     vi.resetModules();
 
     initializeHUDState = vi.fn(async () => {});
+    renderHud = vi.fn(async () => '[HUD] ok');
+    const stdin = options?.stdin ?? fakeStdin;
+    const transcriptData = {
+      agents: [],
+      todos: [],
+      lastActivatedSkill: null,
+      pendingPermission: null,
+      thinkingState: null,
+      toolCallCount: 0,
+      agentCallCount: 0,
+      skillCallCount: 0,
+      sessionStart: null,
+      ...(options?.transcriptData ?? {}),
+    };
 
     vi.doMock('../../hud/stdin.js', () => ({
       readStdin: vi.fn(async () => null),
       writeStdinCache: vi.fn(),
-      readStdinCache: vi.fn(() => fakeStdin),
-      getContextPercent: vi.fn(() => 12),
+      readStdinCache: vi.fn(() => stdin),
+      getContextPercent: vi.fn(() => stdin.context_window.used_percentage ?? 12),
+      getCurrentRequestTokenUsage: vi.fn(() => options?.currentRequestTokenUsage ?? null),
       getModelName: vi.fn(() => 'claude-test'),
     }));
 
     vi.doMock('../../hud/transcript.js', () => ({
-      parseTranscript: vi.fn(async () => ({
-        agents: [],
-        todos: [],
-        lastActivatedSkill: null,
-        pendingPermission: null,
-        thinkingState: null,
-        toolCallCount: 0,
-        agentCallCount: 0,
-        skillCallCount: 0,
-        sessionStart: null,
-      })),
+      parseTranscript: vi.fn(async () => transcriptData),
     }));
 
     vi.doMock('../../hud/state.js', () => ({
@@ -84,7 +94,7 @@ describe('HUD watch mode initialization', () => {
 
     vi.doMock('../../hud/usage-api.js', () => ({ getUsage: vi.fn(async () => null) }));
     vi.doMock('../../hud/custom-rate-provider.js', () => ({ executeCustomProvider: vi.fn(async () => null) }));
-    vi.doMock('../../hud/render.js', () => ({ render: vi.fn(async () => '[HUD] ok') }));
+    vi.doMock('../../hud/render.js', () => ({ render: renderHud }));
     vi.doMock('../../hud/elements/api-key-source.js', () => ({ detectApiKeySource: vi.fn(() => null) }));
     vi.doMock('../../hud/mission-board.js', () => ({ refreshMissionBoardState: vi.fn(async () => null) }));
     vi.doMock('../../hud/sanitize.js', () => ({ sanitizeOutput: vi.fn((value: string) => value) }));
@@ -147,5 +157,53 @@ describe('HUD watch mode initialization', () => {
     await hud.main(true, false);
 
     expect(initializeHUDState).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefers live stdin token usage over lagging transcript usage', async () => {
+    const hud = await importHudModule({
+      currentRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
+      transcriptData: {
+        lastRequestTokenUsage: { inputTokens: 120, outputTokens: 45 },
+      },
+    });
+
+    await hud.main(true, true);
+
+    expect(renderHud).toHaveBeenCalledTimes(1);
+    expect(renderHud.mock.calls[0]?.[0]).toMatchObject({
+      lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
+    });
+  });
+
+  it('keeps transcript token usage when live stdin usage is unavailable', async () => {
+    const hud = await importHudModule({
+      currentRequestTokenUsage: null,
+      transcriptData: {
+        lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+      },
+    });
+
+    await hud.main(true, true);
+
+    expect(renderHud).toHaveBeenCalledTimes(1);
+    expect(renderHud.mock.calls[0]?.[0]).toMatchObject({
+      lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+    });
+  });
+
+  it('keeps transcript token usage when counts match so reasoning tokens survive', async () => {
+    const hud = await importHudModule({
+      currentRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
+      transcriptData: {
+        lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+      },
+    });
+
+    await hud.main(true, true);
+
+    expect(renderHud).toHaveBeenCalledTimes(1);
+    expect(renderHud.mock.calls[0]?.[0]).toMatchObject({
+      lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+    });
   });
 });

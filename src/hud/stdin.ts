@@ -8,7 +8,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
-import type { StatuslineStdin } from './types.js';
+import type { LastRequestTokenUsage, StatuslineStdin } from './types.js';
 
 // ============================================================================
 // Stdin Cache (for --watch mode)
@@ -96,6 +96,35 @@ function getTotalTokens(stdin: StatuslineStdin): number {
     (usage?.cache_creation_input_tokens ?? 0) +
     (usage?.cache_read_input_tokens ?? 0)
   );
+}
+
+/**
+ * Get current request token usage from statusline stdin.
+ * Prefers live input/output counts from the last API call.
+ */
+export function getCurrentRequestTokenUsage(stdin: StatuslineStdin): LastRequestTokenUsage | null {
+  const usage = stdin.context_window?.current_usage;
+  if (!usage) {
+    return null;
+  }
+
+  const hasInputTokens = typeof usage.input_tokens === 'number' && Number.isFinite(usage.input_tokens);
+  const hasOutputTokens = typeof usage.output_tokens === 'number' && Number.isFinite(usage.output_tokens);
+  if (!hasInputTokens || !hasOutputTokens) {
+    return null;
+  }
+
+  const inputTokens = Math.max(0, Math.round(usage.input_tokens));
+  const outputTokens = Math.max(0, Math.round(usage.output_tokens));
+
+  if (inputTokens === 0 && outputTokens === 0) {
+    return null;
+  }
+
+  return {
+    inputTokens,
+    outputTokens,
+  };
 }
 
 /**

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 
 import { parseTranscript } from '../../hud/transcript.js';
 import { renderTokenUsage } from '../../hud/elements/token-usage.js';
+import { getContextPercent, getCurrentRequestTokenUsage } from '../../hud/stdin.js';
 
 const tempDirs: string[] = [];
 
@@ -132,9 +133,89 @@ describe('HUD transcript token usage plumbing', () => {
   });
 });
 
+describe('HUD stdin token usage helpers', () => {
+  it('reads current request token usage from statusline stdin', () => {
+    const stdin = {
+      transcript_path: '/tmp/transcript.jsonl',
+      cwd: '/tmp',
+      model: { id: 'claude-sonnet', display_name: 'Claude Sonnet' },
+      context_window: {
+        context_window_size: 200000,
+        current_usage: {
+          input_tokens: 1530,
+          output_tokens: 987,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    };
+
+    expect(getCurrentRequestTokenUsage(stdin)).toEqual({
+      inputTokens: 1530,
+      outputTokens: 987,
+    });
+  });
+
+  it('returns null when current request usage has no input or output tokens', () => {
+    const stdin = {
+      transcript_path: '/tmp/transcript.jsonl',
+      cwd: '/tmp',
+      model: { id: 'claude-sonnet', display_name: 'Claude Sonnet' },
+      context_window: {
+        context_window_size: 200000,
+        current_usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_creation_input_tokens: 120,
+          cache_read_input_tokens: 340,
+        },
+      },
+    };
+
+    expect(getCurrentRequestTokenUsage(stdin)).toBeNull();
+  });
+
+  it('returns null when output tokens are unavailable in statusline stdin', () => {
+    const stdin = {
+      transcript_path: '/tmp/transcript.jsonl',
+      cwd: '/tmp',
+      model: { id: 'claude-sonnet', display_name: 'Claude Sonnet' },
+      context_window: {
+        context_window_size: 200000,
+        current_usage: {
+          input_tokens: 1530,
+          cache_creation_input_tokens: 120,
+          cache_read_input_tokens: 340,
+        },
+      },
+    };
+
+    expect(getCurrentRequestTokenUsage(stdin)).toBeNull();
+  });
+
+  it('keeps output tokens out of context percentage calculations', () => {
+    const stdin = {
+      transcript_path: '/tmp/transcript.jsonl',
+      cwd: '/tmp',
+      model: { id: 'claude-sonnet', display_name: 'Claude Sonnet' },
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 100,
+          output_tokens: 900,
+          cache_creation_input_tokens: 50,
+          cache_read_input_tokens: 50,
+        },
+      },
+    };
+
+    expect(getContextPercent(stdin)).toBe(20);
+  });
+});
+
 describe('HUD token usage rendering', () => {
   it('formats last-request token usage as plain ASCII input/output counts', () => {
-    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1.5k/o987');
+    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1530/o987');
   });
 
   it('includes reasoning and reliable session totals when available', () => {
@@ -143,7 +224,13 @@ describe('HUD token usage rendering', () => {
         { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
         8765,
       ),
-    ).toBe('tok:i1.5k/o987 r321 s8.8k');
+    ).toBe('tok:i1530/o987 r321 s8765');
+  });
+
+  it('uses ASCII unit suffixes when requested', () => {
+    expect(
+      renderTokenUsage({ inputTokens: 37600, outputTokens: 109 }, 37709, true),
+    ).toBe('tok:i3.76w/o109 s3.77w');
   });
 
   it('returns null when no last-request token usage is available', () => {
