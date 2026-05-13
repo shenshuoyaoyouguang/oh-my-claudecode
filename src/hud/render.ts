@@ -381,6 +381,7 @@ export async function render(
         context.sessionTotalTokens,
         hudLabels,
         config.locale,
+        enabledElements.tokenFormat,
       );
       if (tokenUsage) rendered.set("tokens", tokenUsage);
     }
@@ -390,6 +391,7 @@ export async function render(
       context.sessionTotalTokens,
       hudLabels,
       config.locale,
+      enabledElements.tokenFormat,
     );
     if (tokenUsage) rendered.set("tokens", tokenUsage);
   }

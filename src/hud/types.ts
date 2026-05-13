@@ -456,6 +456,8 @@ export type ModelFormat = 'short' | 'versioned' | 'full';
 
 export type CallCountsFormat = 'auto' | 'emoji' | 'ascii';
 
+export type TokenFormat = 'detailed' | 'total';
+
 export type HudLocale = 'en' | 'zh-CN';
 
 export interface HudLabels {
@@ -602,6 +604,7 @@ export interface HudElementConfig {
   showSessionDuration?: boolean;  // Show session:19m duration display (default: true if sessionHealth is true)
   showHealthIndicator?: boolean;  // Show 🟢/🟡/🔴 health indicator (default: true if sessionHealth is true)
   showTokens?: boolean;           // Show last-request token usage when enabled (tok:i1.2k/o340)
+  tokenFormat?: TokenFormat;      // 'detailed' shows 入/出/总, 'total' shows only session total (default: 'detailed')
   enterpriseMode?: boolean;       // Explicit override for enterprise mode (undefined = auto-detect)
   showEnterpriseCost?: boolean;   // Whether to render enterprise billing cost (default: true when enterprise)
   useBars: boolean;           // Show visual progress bars instead of/alongside percentages
