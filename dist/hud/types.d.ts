@@ -364,6 +364,14 @@ export interface HudLabels {
     untracked: string;
     ahead: string;
     behind: string;
+    critical: string;
+    compress: string;
+    approve: string;
+    working: string;
+    tokenInput: string;
+    tokenOutput: string;
+    tokenReasoning: string;
+    tokenSession: string;
 }
 export declare const DEFAULT_HUD_LABELS: HudLabels;
 export declare const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels>;

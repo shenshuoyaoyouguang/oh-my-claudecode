@@ -45,14 +45,15 @@ function getContextSeverity(
 function getContextDisplayStyle(
   safePercent: number,
   thresholds: HudThresholds,
+  labels: HudLabels = DEFAULT_HUD_LABELS,
 ): { color: string; suffix: string } {
   const severity = getContextSeverity(safePercent, thresholds);
 
   switch (severity) {
     case 'critical':
-      return { color: RED, suffix: ' CRITICAL' };
+      return { color: RED, suffix: ` ${labels.critical}` };
     case 'compact':
-      return { color: YELLOW, suffix: ' COMPRESS?' };
+      return { color: YELLOW, suffix: ` ${labels.compress}` };
     case 'warning':
       return { color: YELLOW, suffix: '' };
     default:
@@ -129,10 +130,10 @@ export function renderContext(
   percent: number,
   thresholds: HudThresholds,
   displayScope?: string | null,
-  labels: Pick<HudLabels, 'context'> = DEFAULT_HUD_LABELS,
+  labels: HudLabels = DEFAULT_HUD_LABELS,
 ): string | null {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
 
   return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
 }
@@ -147,13 +148,13 @@ export function renderContextWithBar(
   thresholds: HudThresholds,
   barWidth: number = 10,
   displayScope?: string | null,
-  labels: Pick<HudLabels, 'context'> = DEFAULT_HUD_LABELS,
+  labels: HudLabels = DEFAULT_HUD_LABELS,
 ): string | null {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const filled = Math.round((safePercent / 100) * barWidth);
   const empty = barWidth - filled;
 
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
   return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

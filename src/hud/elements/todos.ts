@@ -4,7 +4,8 @@
  * Renders todo progress display.
  */
 
-import type { TodoItem } from "../types.js";
+import type { TodoItem, HudLabels } from "../types.js";
+import { DEFAULT_HUD_LABELS } from "../types.js";
 import { RESET } from "../colors.js";
 import { truncateToWidth } from "../../utils/string-width.js";
 
@@ -47,7 +48,10 @@ export function renderTodos(todos: TodoItem[]): string | null {
  *
  * Format: todos:2/5 (working: Implementing feature)
  */
-export function renderTodosWithCurrent(todos: TodoItem[]): string | null {
+export function renderTodosWithCurrent(
+  todos: TodoItem[],
+  labels: HudLabels = DEFAULT_HUD_LABELS,
+): string | null {
   if (todos.length === 0) {
     return null;
   }
@@ -74,7 +78,7 @@ export function renderTodosWithCurrent(todos: TodoItem[]): string | null {
     const activeText = inProgress.activeForm || inProgress.content || "...";
     // Use CJK-aware truncation (30 visual columns)
     const truncated = truncateToWidth(activeText, 30);
-    result += ` ${DIM}(working: ${truncated})${RESET}`;
+    result += ` ${DIM}(${labels.working}: ${truncated})${RESET}`;
   }
 
   return result;

@@ -8,5 +8,5 @@ export declare const colors: {
     gray: (text: string) => string;
     bold: (text: string) => string;
 };
-export declare function formatTokenCount(tokens: number): string;
+export declare function formatTokenCount(tokens: number, locale?: string): string;
 //# sourceMappingURL=formatting.d.ts.map

@@ -165,10 +165,11 @@ describe('HUD labels', () => {
 
   it('applies configured labels through the composed HUD renderer', async () => {
     const labels = resolveHudLabels('zh-CN');
-    const output = stripAnsi(await render(createContext(), createConfig(labels)));
+    const config = { ...createConfig(labels), locale: 'zh-CN' as const };
+    const output = stripAnsi(await render(createContext(), config));
 
     expect(output).toContain('思考');
-    expect(output).toContain('令牌:i1.5k/o987');
+    expect(output).toContain('令牌:入1.5千/出987');
     expect(output).toContain('循环:3/10');
     expect(output).toContain('上下文:67%');
     expect(output).toContain('后台:1/5');

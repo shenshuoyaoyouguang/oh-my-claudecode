@@ -18,6 +18,14 @@ export const DEFAULT_HUD_LABELS = {
     untracked: '?',
     ahead: '⇡',
     behind: '⇣',
+    critical: 'CRITICAL',
+    compress: 'COMPRESS?',
+    approve: 'APPROVE?',
+    working: 'working',
+    tokenInput: 'i',
+    tokenOutput: 'o',
+    tokenReasoning: 'r',
+    tokenSession: 's',
 };
 export const HUD_LOCALE_LABELS = {
     en: DEFAULT_HUD_LABELS,
@@ -35,6 +43,14 @@ export const HUD_LOCALE_LABELS = {
         untracked: '未跟踪',
         ahead: '领先',
         behind: '落后',
+        critical: '危险',
+        compress: '压缩一下？',
+        approve: '允许？',
+        working: '进行中',
+        tokenInput: '入',
+        tokenOutput: '出',
+        tokenReasoning: '思',
+        tokenSession: '总',
     },
 };
 export const HUD_LABEL_KEYS = Object.freeze(Object.keys(DEFAULT_HUD_LABELS));

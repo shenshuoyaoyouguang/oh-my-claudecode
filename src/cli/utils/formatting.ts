@@ -9,7 +9,19 @@ export const colors = {
   bold: (text: string) => `\x1b[1m${text}\x1b[0m`
 };
 
-export function formatTokenCount(tokens: number): string {
+export function formatTokenCount(tokens: number, locale?: string): string {
+  if (locale === 'zh-CN') {
+    if (tokens < 1000) return `${tokens}`;
+    if (tokens < 10000) {
+      const val = tokens / 1000;
+      return `${val < 10 ? val.toFixed(1) : Math.round(val)}千`;
+    }
+    if (tokens < 100000000) {
+      const val = tokens / 10000;
+      return `${val < 100 ? val.toFixed(1) : Math.round(val)}万`;
+    }
+    return `${(tokens / 100000000).toFixed(1)}亿`;
+  }
   if (tokens < 1000) return `${tokens}`;
   if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}k`;
   return `${(tokens / 1000000).toFixed(2)}M`;

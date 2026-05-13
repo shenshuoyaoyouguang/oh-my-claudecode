@@ -472,6 +472,14 @@ export interface HudLabels {
   untracked: string;
   ahead: string;
   behind: string;
+  critical: string;
+  compress: string;
+  approve: string;
+  working: string;
+  tokenInput: string;
+  tokenOutput: string;
+  tokenReasoning: string;
+  tokenSession: string;
 }
 
 export const DEFAULT_HUD_LABELS: HudLabels = {
@@ -488,6 +496,14 @@ export const DEFAULT_HUD_LABELS: HudLabels = {
   untracked: '?',
   ahead: '⇡',
   behind: '⇣',
+  critical: 'CRITICAL',
+  compress: 'COMPRESS?',
+  approve: 'APPROVE?',
+  working: 'working',
+  tokenInput: 'i',
+  tokenOutput: 'o',
+  tokenReasoning: 'r',
+  tokenSession: 's',
 };
 
 export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
@@ -506,6 +522,14 @@ export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
     untracked: '未跟踪',
     ahead: '领先',
     behind: '落后',
+    critical: '危险',
+    compress: '压缩一下？',
+    approve: '允许？',
+    working: '进行中',
+    tokenInput: '入',
+    tokenOutput: '出',
+    tokenReasoning: '思',
+    tokenSession: '总',
   },
 };
 

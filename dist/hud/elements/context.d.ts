@@ -19,11 +19,11 @@ export declare function getStableContextDisplayPercent(percent: number, threshol
  *
  * Format: ctx:67%
  */
-export declare function renderContext(percent: number, thresholds: HudThresholds, displayScope?: string | null, labels?: Pick<HudLabels, 'context'>): string | null;
+export declare function renderContext(percent: number, thresholds: HudThresholds, displayScope?: string | null, labels?: HudLabels): string | null;
 /**
  * Render context window with visual bar.
  *
  * Format: ctx:[████░░░░░░]67%
  */
-export declare function renderContextWithBar(percent: number, thresholds: HudThresholds, barWidth?: number, displayScope?: string | null, labels?: Pick<HudLabels, 'context'>): string | null;
+export declare function renderContextWithBar(percent: number, thresholds: HudThresholds, barWidth?: number, displayScope?: string | null, labels?: HudLabels): string | null;
 //# sourceMappingURL=context.d.ts.map

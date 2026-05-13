@@ -340,7 +340,7 @@ export async function render(
   }
 
   if (enabledElements.permissionStatus && context.pendingPermission) {
-    const permission = renderPermission(context.pendingPermission);
+    const permission = renderPermission(context.pendingPermission, hudLabels);
     if (permission) rendered.set("permission", permission);
   }
 
@@ -380,6 +380,7 @@ export async function render(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
         hudLabels,
+        config.locale,
       );
       if (tokenUsage) rendered.set("tokens", tokenUsage);
     }
@@ -388,6 +389,7 @@ export async function render(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
       hudLabels,
+      config.locale,
     );
     if (tokenUsage) rendered.set("tokens", tokenUsage);
   }
@@ -501,7 +503,7 @@ export async function render(
   if (ctxWarning) renderedDetail.set("contextWarning", [ctxWarning]);
 
   if (enabledElements.todos) {
-    const todos = renderTodosWithCurrent(context.todos);
+    const todos = renderTodosWithCurrent(context.todos, hudLabels);
     if (todos) renderedDetail.set("todos", [todos]);
   }
 

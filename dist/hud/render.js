@@ -273,7 +273,7 @@ export async function render(context, config) {
             rendered.set("customBuckets", custom);
     }
     if (enabledElements.permissionStatus && context.pendingPermission) {
-        const permission = renderPermission(context.pendingPermission);
+        const permission = renderPermission(context.pendingPermission, hudLabels);
         if (permission)
             rendered.set("permission", permission);
     }
@@ -303,13 +303,13 @@ export async function render(context, config) {
         }
         else if (enabledElements.showTokens === true) {
             // Enterprise but no cost data — fall back to token usage
-            const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels);
+            const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale);
             if (tokenUsage)
                 rendered.set("tokens", tokenUsage);
         }
     }
     else if (enabledElements.showTokens === true) {
-        const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels);
+        const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale);
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
     }
@@ -395,7 +395,7 @@ export async function render(context, config) {
     if (ctxWarning)
         renderedDetail.set("contextWarning", [ctxWarning]);
     if (enabledElements.todos) {
-        const todos = renderTodosWithCurrent(context.todos);
+        const todos = renderTodosWithCurrent(context.todos, hudLabels);
         if (todos)
             renderedDetail.set("todos", [todos]);
     }
