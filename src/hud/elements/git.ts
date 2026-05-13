@@ -7,7 +7,7 @@
 import { execSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { dim, cyan, green, red } from '../colors.js';
+import { dim, APPLE_CYAN, APPLE_GREEN, APPLE_RED, APPLE_GRAY, RESET } from '../colors.js';
 import type { HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 
@@ -175,7 +175,7 @@ export function getWorktreeInfo(cwd?: string): WorktreeDetection {
 export function renderGitRepo(cwd?: string): string | null {
   const repo = getGitRepoName(cwd);
   if (!repo) return null;
-  return `${dim('repo:')}${cyan(repo)}`;
+  return `${APPLE_GRAY}repo:${RESET}${APPLE_CYAN}${repo}${RESET}`;
 }
 
 /**
@@ -192,10 +192,10 @@ export function renderGitBranch(cwd?: string): string | null {
 
   const wtInfo = getWorktreeInfo(cwd);
   if (wtInfo.isWorktree && wtInfo.worktreeName) {
-    return `${dim('branch:')}${cyan(branch)} ${dim('(wt:')}${cyan(wtInfo.worktreeName)}${dim(')')}`;
+    return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET} ${APPLE_GRAY}(wt:${RESET}${APPLE_CYAN}${wtInfo.worktreeName}${RESET}${APPLE_GRAY})${RESET}`;
   }
 
-  return `${dim('branch:')}${cyan(branch)}`;
+  return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET}`;
 }
 
 /**
@@ -279,11 +279,11 @@ export function renderGitStatus(
   }
 
   const parts: string[] = [];
-  if (staged > 0) parts.push(`${green(labels.staged)}${staged}`);
-  if (modified > 0) parts.push(`${red(labels.modified)}${modified}`);
-  if (untracked > 0) parts.push(`${cyan(labels.untracked)}${untracked}`);
-  if (ahead > 0) parts.push(`${green(labels.ahead)}${ahead}`);
-  if (behind > 0) parts.push(`${red(labels.behind)}${behind}`);
+  if (staged > 0) parts.push(`${APPLE_GREEN}${labels.staged}${staged}${RESET}`);
+  if (modified > 0) parts.push(`${APPLE_RED}${labels.modified}${modified}${RESET}`);
+  if (untracked > 0) parts.push(`${APPLE_CYAN}${labels.untracked}${untracked}${RESET}`);
+  if (ahead > 0) parts.push(`${APPLE_GREEN}${labels.ahead}${ahead}${RESET}`);
+  if (behind > 0) parts.push(`${APPLE_RED}${labels.behind}${behind}${RESET}`);
 
   return parts.join(' ');
 }

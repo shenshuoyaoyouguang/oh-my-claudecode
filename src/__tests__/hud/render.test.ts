@@ -733,7 +733,7 @@ describe('layout element ordering', () => {
     expect(mainLine).toBeDefined();
     expect(mainLine!).toContain('ctx:');
     expect(mainLine!).toContain('session:');
-    expect(mainLine!).toMatch(/(?:🔧5|T:5)/);
+    expect(mainLine!).toMatch(/(?:🔧5|T:\x1b\[0m5)/);
     expect(mainLine!.indexOf('ctx:')).toBeLessThan(mainLine!.indexOf('[OMC'));
     expect(mainLine!.indexOf('[OMC')).toBeLessThan(mainLine!.indexOf('session:'));
   });

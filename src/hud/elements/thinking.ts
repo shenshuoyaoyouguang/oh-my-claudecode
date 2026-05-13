@@ -6,9 +6,7 @@
 
 import type { ThinkingState, ThinkingFormat, HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
-
-const CYAN = '\x1b[36m';
+import { RESET, APPLE_CYAN } from '../colors.js';
 
 /**
  * Render thinking indicator based on format.
@@ -32,7 +30,7 @@ export function renderThinking(
     case 'face':
       return '🤔';
     case 'text':
-      return `${CYAN}${labels.thinking}${RESET}`;
+      return `${APPLE_CYAN}${labels.thinking}${RESET}`;
     default:
       return '💭';
   }

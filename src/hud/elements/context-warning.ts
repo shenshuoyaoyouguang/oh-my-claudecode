@@ -5,10 +5,8 @@
  * threshold. Supports an autoCompact mode that queues a /compact request.
  */
 
-import { RESET } from '../colors.js';
+import { RESET, APPLE_ORANGE, APPLE_RED } from '../colors.js';
 
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
 const BOLD = '\x1b[1m';
 
 /**
@@ -32,7 +30,7 @@ export function renderContextLimitWarning(
   }
 
   const isCritical = safePercent >= 90;
-  const color = isCritical ? RED : YELLOW;
+  const color = isCritical ? APPLE_RED : APPLE_ORANGE;
   const icon = isCritical ? '!!' : '!';
   const action = autoCompact ? '(auto-compact queued)' : 'run /compact';
 

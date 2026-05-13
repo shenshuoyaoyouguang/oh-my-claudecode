@@ -6,7 +6,7 @@
 
 import type { HudRenderContext, HudConfig, LayoutConfig } from "./types.js";
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim } from "./colors.js";
+import { bold, dim, APPLE_GRAY, RESET } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderRalph } from "./elements/ralph.js";
 import {
@@ -49,7 +49,7 @@ import { renderLastTool } from "./elements/last-tool.js";
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 
 const PLAIN_SEPARATOR = " | ";
-const DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+const DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
 
 function buildMainElementOrder(elementOrder: string[] | undefined): string[] {
   if (!Array.isArray(elementOrder) || elementOrder.length === 0) {

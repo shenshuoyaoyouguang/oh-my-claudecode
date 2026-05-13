@@ -6,11 +6,8 @@
 
 import type { HudLabels, HudThresholds } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_RED } from '../colors.js';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
 const DIM = '\x1b[2m';
 const CONTEXT_DISPLAY_HYSTERESIS = 2;
 const CONTEXT_DISPLAY_STATE_TTL_MS = 5_000;
@@ -51,13 +48,13 @@ function getContextDisplayStyle(
 
   switch (severity) {
     case 'critical':
-      return { color: RED, suffix: ` ${labels.critical}` };
+      return { color: APPLE_RED, suffix: ` ${labels.critical}` };
     case 'compact':
-      return { color: YELLOW, suffix: ` ${labels.compress}` };
+      return { color: APPLE_ORANGE, suffix: ` ${labels.compress}` };
     case 'warning':
-      return { color: YELLOW, suffix: '' };
+      return { color: APPLE_ORANGE, suffix: '' };
     default:
-      return { color: GREEN, suffix: '' };
+      return { color: APPLE_GREEN, suffix: '' };
   }
 }
 

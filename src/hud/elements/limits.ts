@@ -6,11 +6,8 @@
  */
 
 import type { RateLimits, CustomProviderResult, CustomBucketUsage, UsageResult } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_RED, APPLE_GRAY } from '../colors.js';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
 const DIM = '\x1b[2m';
 
 // Thresholds for rate limit warnings
@@ -22,11 +19,11 @@ const CRITICAL_THRESHOLD = 90;
  */
 function getColor(percent: number): string {
   if (percent >= CRITICAL_THRESHOLD) {
-    return RED;
+    return APPLE_RED;
   } else if (percent >= WARNING_THRESHOLD) {
-    return YELLOW;
+    return APPLE_ORANGE;
   }
-  return GREEN;
+  return APPLE_GREEN;
 }
 
 /**
@@ -310,8 +307,8 @@ export function renderRateLimitsError(result: UsageResult | null): string | null
     // when there is no cached rate limit data to display.
     return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
   }
-  if (result.error === 'auth') return `${YELLOW}[API auth]${RESET}`;
-  return `${YELLOW}[API err]${RESET}`;
+  if (result.error === 'auth') return `${APPLE_ORANGE}[API auth]${RESET}`;
+  return `${APPLE_ORANGE}[API err]${RESET}`;
 }
 
 // ============================================================================
@@ -355,7 +352,7 @@ export function renderCustomBuckets(
 ): string | null {
   // Command failed and no cached data
   if (result.error && result.buckets.length === 0) {
-    return `${YELLOW}[cmd:err]${RESET}`;
+    return `${APPLE_ORANGE}[cmd:err]${RESET}`;
   }
 
   if (result.buckets.length === 0) return null;

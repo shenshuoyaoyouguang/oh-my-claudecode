@@ -125,7 +125,7 @@ describe('HUD labels', () => {
   it('keeps default HUD labels unchanged for direct renderer calls', () => {
     expect(stripAnsi(renderContext(67, DEFAULT_HUD_CONFIG.thresholds, 'labels-default') ?? '')).toBe('ctx:67%');
     expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1.5k/o987');
-    expect(renderCallCounts(5, 3, 2, 'ascii')).toBe('T:5 A:3 S:2');
+    expect(stripAnsi(renderCallCounts(5, 3, 2, 'ascii') ?? '')).toBe('T:5 A:3 S:2');
   });
 
   it('resolves zh-CN locale labels and lets explicit labels override locale', () => {

@@ -17,7 +17,7 @@ describe('renderThinking', () => {
   it('returns styled "thinking" for text format (default)', () => {
     const result = renderThinking(activeState);
     expect(result).toContain('thinking');
-    expect(result).toContain('\x1b[36m'); // cyan
+    expect(result).toContain('\x1b[38;2;100;210;255m'); // Apple cyan
   });
 
   it('returns 💭 for bubble format', () => {
@@ -35,6 +35,6 @@ describe('renderThinking', () => {
   it('returns styled "thinking" for explicit text format', () => {
     const result = renderThinking(activeState, 'text');
     expect(result).toContain('thinking');
-    expect(result).toContain('\x1b[36m'); // cyan
+    expect(result).toContain('\x1b[38;2;100;210;255m'); // Apple cyan
   });
 });

@@ -14,6 +14,7 @@
 import { isWSL } from '../../platform/index.js';
 import type { CallCountsFormat, HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
+import { APPLE_GRAY } from '../colors.js';
 
 function shouldUseAscii(format: CallCountsFormat = 'auto'): boolean {
   if (format === 'ascii') return true;
@@ -27,9 +28,9 @@ function getIcons(
 ) {
   const useAscii = shouldUseAscii(format);
   return {
-    tool: useAscii ? `${labels.tool}:` : '\u{1F527}',
-    agent: useAscii ? `${labels.agent}:` : '\u{1F916}',
-    skill: useAscii ? `${labels.skill}:` : '\u26A1',
+    tool: useAscii ? `${APPLE_GRAY}${labels.tool}:${'\x1b[0m'}` : '\u{1F527}',
+    agent: useAscii ? `${APPLE_GRAY}${labels.agent}:${'\x1b[0m'}` : '\u{1F916}',
+    skill: useAscii ? `${APPLE_GRAY}${labels.skill}:${'\x1b[0m'}` : '\u26A1',
   };
 }
 

@@ -6,7 +6,7 @@
 
 import type { PendingPermission, HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { dim, yellow } from '../colors.js';
+import { dim, appleOrange } from '../colors.js';
 
 /**
  * Render permission pending indicator.
@@ -18,5 +18,5 @@ export function renderPermission(
   labels: HudLabels = DEFAULT_HUD_LABELS,
 ): string | null {
   if (!pending) return null;
-  return `${yellow(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
+  return `${appleOrange(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
 }

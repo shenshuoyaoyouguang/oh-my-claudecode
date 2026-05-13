@@ -5,11 +5,8 @@
  */
 
 import type { UltraworkStateForHud, RalphStateForHud, SkillInvocation } from '../types.js';
-import { RESET, cyan } from '../colors.js';
+import { RESET, APPLE_PURPLE, APPLE_CYAN } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
-
-const MAGENTA = '\x1b[35m';
-const BRIGHT_MAGENTA = '\x1b[95m';
 
 /**
  * Truncate string to max visual width with ellipsis.
@@ -58,18 +55,18 @@ export function renderSkills(
   // Active modes (ultrawork, ralph)
   if (ralph?.active && ultrawork?.active) {
     // Combined mode
-    parts.push(`${BRIGHT_MAGENTA}ultrawork+ralph${RESET}`);
+    parts.push(`${APPLE_PURPLE}ultrawork+ralph${RESET}`);
   } else if (ultrawork?.active) {
-    parts.push(`${MAGENTA}ultrawork${RESET}`);
+    parts.push(`${APPLE_PURPLE}ultrawork${RESET}`);
   } else if (ralph?.active) {
-    parts.push(`${MAGENTA}ralph${RESET}`);
+    parts.push(`${APPLE_PURPLE}ralph${RESET}`);
   }
 
   // Last skill (if different from active mode)
   if (lastSkill && !isActiveMode(lastSkill.name, ultrawork, ralph)) {
     const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
     const displayName = getSkillDisplayName(lastSkill.name);
-    parts.push(cyan(`skill:${displayName}${argsDisplay}`));
+    parts.push(`${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`);
   }
 
   return parts.length > 0 ? parts.join(' ') : null;
@@ -85,7 +82,7 @@ export function renderLastSkill(
 
   const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
   const displayName = getSkillDisplayName(lastSkill.name);
-  return cyan(`skill:${displayName}${argsDisplay}`);
+  return `${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`;
 }
 
 /**
@@ -113,5 +110,5 @@ export function renderSkillsWithReinforcement(
     parts.push('ralph');
   }
 
-  return `${MAGENTA}${parts.join('-')}${RESET}`;
+  return `${APPLE_PURPLE}${parts.join('-')}${RESET}`;
 }

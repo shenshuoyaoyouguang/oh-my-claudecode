@@ -6,12 +6,9 @@
 
 import type { TodoItem, HudLabels } from "../types.js";
 import { DEFAULT_HUD_LABELS } from "../types.js";
-import { RESET } from "../colors.js";
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_CYAN } from "../colors.js";
 import { truncateToWidth } from "../../utils/string-width.js";
 
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const CYAN = "\x1b[36m";
 const DIM = "\x1b[2m";
 
 /**
@@ -33,11 +30,11 @@ export function renderTodos(todos: TodoItem[]): string | null {
   const percent = (completed / total) * 100;
 
   if (percent >= 80) {
-    color = GREEN;
+    color = APPLE_GREEN;
   } else if (percent >= 50) {
-    color = YELLOW;
+    color = APPLE_ORANGE;
   } else {
-    color = CYAN;
+    color = APPLE_CYAN;
   }
 
   return `todos:${color}${completed}/${total}${RESET}`;
@@ -65,11 +62,11 @@ export function renderTodosWithCurrent(
   let color: string;
 
   if (percent >= 80) {
-    color = GREEN;
+    color = APPLE_GREEN;
   } else if (percent >= 50) {
-    color = YELLOW;
+    color = APPLE_ORANGE;
   } else {
-    color = CYAN;
+    color = APPLE_CYAN;
   }
 
   let result = `todos:${color}${completed}/${total}${RESET}`;
