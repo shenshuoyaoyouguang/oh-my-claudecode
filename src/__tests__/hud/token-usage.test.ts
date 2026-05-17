@@ -158,7 +158,7 @@ describe("HUD transcript token usage plumbing", () => {
 describe("HUD token usage rendering", () => {
   it("formats last-request token usage as plain ASCII input/output counts", () => {
     expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe(
-      "tok:i1.5k/o987",
+      "↓1.5k ↑987",
     );
   });
 
@@ -168,7 +168,7 @@ describe("HUD token usage rendering", () => {
         { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
         8765,
       ),
-    ).toBe("tok:i1.5k/o987 r321 s8.8k");
+    ).toBe("↓1.5k ↑987 ≈321 Σ8.8k");
   });
 
   it("returns null when no last-request token usage is available", () => {

@@ -131,10 +131,10 @@ describe("HUD transcript token usage plumbing", () => {
 });
 describe("HUD token usage rendering", () => {
     it("formats last-request token usage as plain ASCII input/output counts", () => {
-        expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe("tok:i1.5k/o987");
+        expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe("↓1.5k ↑987");
     });
     it("includes reasoning and reliable session totals when available", () => {
-        expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 }, 8765)).toBe("tok:i1.5k/o987 r321 s8.8k");
+        expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 }, 8765)).toBe("↓1.5k ↑987 ≈321 Σ8.8k");
     });
     it("returns null when no last-request token usage is available", () => {
         expect(renderTokenUsage(null)).toBeNull();

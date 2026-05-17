@@ -533,7 +533,7 @@ describe('token usage rendering', () => {
   it('shows last-request token usage when enabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(true));
 
-    expect(result).toContain('tok:i1.3k/o340 r120 s6.6k');
+    expect(result).toContain('↓1.3k ↑340 ≈120 Σ6.6k');
   });
 
   it('omits last-request token usage when explicitly disabled', async () => {

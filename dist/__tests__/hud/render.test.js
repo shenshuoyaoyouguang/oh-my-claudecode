@@ -464,7 +464,7 @@ describe('token usage rendering', () => {
     });
     it('shows last-request token usage when enabled', async () => {
         const result = await render(createTokenContext(), createTokenConfig(true));
-        expect(result).toContain('tok:i1.3k/o340 r120 s6.6k');
+        expect(result).toContain('↓1.3k ↑340 ≈120 Σ6.6k');
     });
     it('omits last-request token usage when explicitly disabled', async () => {
         const result = await render(createTokenContext(), createTokenConfig(false));
@@ -631,7 +631,7 @@ describe('layout element ordering', () => {
         expect(mainLine).toBeDefined();
         expect(mainLine).toContain('ctx:');
         expect(mainLine).toContain('session:');
-        expect(mainLine).toMatch(/(?:🔧5|T:5)/);
+        expect(mainLine).toMatch(/(?:🔧5|T:\x1b\[0m5)/);
         expect(mainLine.indexOf('ctx:')).toBeLessThan(mainLine.indexOf('[OMC'));
         expect(mainLine.indexOf('[OMC')).toBeLessThan(mainLine.indexOf('session:'));
     });

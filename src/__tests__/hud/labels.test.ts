@@ -124,7 +124,7 @@ describe('HUD labels', () => {
 
   it('keeps default HUD labels unchanged for direct renderer calls', () => {
     expect(stripAnsi(renderContext(67, DEFAULT_HUD_CONFIG.thresholds, 'labels-default') ?? '')).toBe('ctx:67%');
-    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1.5k/o987');
+    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('↓1.5k ↑987');
     expect(stripAnsi(renderCallCounts(5, 3, 2, 'ascii') ?? '')).toBe('T:5 A:3 S:2');
   });
 
@@ -169,7 +169,7 @@ describe('HUD labels', () => {
     const output = stripAnsi(await render(createContext(), config));
 
     expect(output).toContain('思考');
-    expect(output).toContain('令牌:入1.5千/出987');
+    expect(output).toContain('↓1.5千 ↑987');
     expect(output).toContain('循环:3/10');
     expect(output).toContain('上下文:67%');
     expect(output).toContain('后台:1/5');

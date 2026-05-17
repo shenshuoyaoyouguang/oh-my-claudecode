@@ -22,19 +22,19 @@ export function renderTokenUsage(
 
   // 'total' mode: show only session total
   if (tokenFormat === 'total' && sessionTotalTokens && sessionTotalTokens > 0) {
-    return `${labels.tokens}:${formatTokenCount(sessionTotalTokens, locale)}`;
+    return `Σ${formatTokenCount(sessionTotalTokens, locale)}`;
   }
 
   const parts = [
-    `${labels.tokens}:${labels.tokenInput}${formatTokenCount(usage.inputTokens, locale)}/${labels.tokenOutput}${formatTokenCount(usage.outputTokens, locale)}`,
+    `↓${formatTokenCount(usage.inputTokens, locale)} ↑${formatTokenCount(usage.outputTokens, locale)}`,
   ];
 
   if (usage.reasoningTokens && usage.reasoningTokens > 0) {
-    parts.push(`${labels.tokenReasoning}${formatTokenCount(usage.reasoningTokens, locale)}`);
+    parts.push(`≈${formatTokenCount(usage.reasoningTokens, locale)}`);
   }
 
   if (sessionTotalTokens && sessionTotalTokens > 0) {
-    parts.push(`${labels.tokenSession}${formatTokenCount(sessionTotalTokens, locale)}`);
+    parts.push(`Σ${formatTokenCount(sessionTotalTokens, locale)}`);
   }
 
   return parts.join(' ');

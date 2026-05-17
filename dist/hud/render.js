@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim } from "./colors.js";
+import { bold, dim, APPLE_GRAY, RESET } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderRalph } from "./elements/ralph.js";
 import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
@@ -37,7 +37,7 @@ import { renderLastTool } from "./elements/last-tool.js";
  */
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
-const DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+const DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
 function buildMainElementOrder(elementOrder) {
     if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
         return DEFAULT_ELEMENT_ORDER.main;
@@ -303,13 +303,13 @@ export async function render(context, config) {
         }
         else if (enabledElements.showTokens === true) {
             // Enterprise but no cost data — fall back to token usage
-            const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale);
+            const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale, enabledElements.tokenFormat);
             if (tokenUsage)
                 rendered.set("tokens", tokenUsage);
         }
     }
     else if (enabledElements.showTokens === true) {
-        const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale);
+        const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels, config.locale, enabledElements.tokenFormat);
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
     }
