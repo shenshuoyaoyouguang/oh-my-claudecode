@@ -6,6 +6,7 @@
 import type { AutopilotStateForHud } from './elements/autopilot.js';
 import type { ApiKeySource } from './elements/api-key-source.js';
 import type { SessionSummaryState } from './elements/session-summary.js';
+import type { PayloadEstimate } from './payload-estimate.js';
 import type { MissionBoardConfig, MissionBoardState } from './mission-board.js';
 export type { AutopilotStateForHud, ApiKeySource, SessionSummaryState };
 export interface BackgroundTask {
@@ -251,8 +252,10 @@ export interface HudRenderContext {
     contextPercent: number;
     /** Stable display scope for context smoothing (e.g. session/worktree key) */
     contextDisplayScope?: string | null;
-    /** Model display name */
-    modelName: string;
+    /** Model display name from Claude Code statusline stdin; null when unavailable */
+    modelName: string | null;
+    /** Raw model id from Claude Code statusline stdin; used when full model format is requested */
+    modelId?: string | null;
     /** Ralph loop state */
     ralph: RalphStateForHud | null;
     /** Ultrawork state */
@@ -313,6 +316,8 @@ export interface HudRenderContext {
     sessionSummary: SessionSummaryState | null;
     /** Name of the last tool called in this session */
     lastToolName?: string | null;
+    /** Best-effort local transcript-backed request payload pressure estimate. */
+    payloadEstimate?: PayloadEstimate | null;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense';
 /**
@@ -359,6 +364,7 @@ export interface HudLabels {
     ralph: string;
     background: string;
     thinking: string;
+    model: string;
     staged: string;
     modified: string;
     untracked: string;
@@ -390,6 +396,7 @@ export interface HudElementConfig {
     model: boolean;
     modelFormat: ModelFormat;
     omcLabel: boolean;
+    updateNotification?: boolean;
     rateLimits: boolean;
     ralph: boolean;
     autopilot: boolean;

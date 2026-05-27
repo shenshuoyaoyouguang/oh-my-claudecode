@@ -6,6 +6,7 @@
  */
 
 import { RESET, APPLE_ORANGE, APPLE_RED } from '../colors.js';
+import type { PayloadEstimate } from '../payload-estimate.js';
 
 const BOLD = '\x1b[1m';
 
@@ -35,4 +36,27 @@ export function renderContextLimitWarning(
   const action = autoCompact ? '(auto-compact queued)' : 'run /compact';
 
   return `${color}${BOLD}[${icon}] ctx ${safePercent}% >= ${threshold}% threshold - ${action}${RESET}`;
+}
+
+/**
+ * Render a request payload pressure warning.
+ *
+ * This is intentionally warning-only: HUD hooks do not receive the exact Claude
+ * Code API request body, so auto-compacting from this estimate would be unsafe.
+ */
+export function renderPayloadLimitWarning(
+  payloadEstimate: PayloadEstimate | null | undefined,
+): string | null {
+  if (!payloadEstimate || payloadEstimate.pressure === 'normal') {
+    return null;
+  }
+
+  const isCritical = payloadEstimate.pressure === 'critical';
+  const color = isCritical ? RED : YELLOW;
+  const icon = isCritical ? '!!' : '!';
+  const action = isCritical
+    ? 'compact may fail; consider new session'
+    : 'consider /compact soon';
+
+  return `${color}${BOLD}[${icon}] ${payloadEstimate.label} - ${action}${RESET}`;
 }
