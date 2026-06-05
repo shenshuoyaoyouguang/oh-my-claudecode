@@ -58,6 +58,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, appendFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { atomicWriteJson, ensureDirWithMode, validateResolvedPath } from './fs-utils.js';
+import { getOmcRoot } from '../lib/worktree-paths.js';
 import { isRuntimeV2Enabled } from './runtime-flags.js';
 import { sanitizeName } from './tmux-session.js';
 import { listTeamWorktrees, getWorktreePath, getBranchName } from './git-worktree.js';
@@ -72,16 +73,16 @@ const DEFAULT_DRAIN_TIMEOUT_MS = 10000;
 // Path helpers
 // ---------------------------------------------------------------------------
 function mergerWorktreePathFor(repoRoot, teamName) {
-    return join(repoRoot, '.omc', 'team', sanitizeName(teamName), 'merger');
+    return join(getOmcRoot(repoRoot), 'team', sanitizeName(teamName), 'merger');
 }
 function persistedStatePath(repoRoot, teamName) {
-    return join(repoRoot, '.omc', 'state', 'team', sanitizeName(teamName), 'auto-merge-state.json');
+    return join(getOmcRoot(repoRoot), 'state', 'team', sanitizeName(teamName), 'auto-merge-state.json');
 }
 function teardownAuditPath(repoRoot, teamName) {
-    return join(repoRoot, '.omc', 'state', 'team', sanitizeName(teamName), 'teardown-audit.jsonl');
+    return join(getOmcRoot(repoRoot), 'state', 'team', sanitizeName(teamName), 'teardown-audit.jsonl');
 }
 function orchestratorEventLogPath(repoRoot, teamName) {
-    return join(repoRoot, '.omc', 'state', 'team', sanitizeName(teamName), 'orchestrator-events.jsonl');
+    return join(getOmcRoot(repoRoot), 'state', 'team', sanitizeName(teamName), 'orchestrator-events.jsonl');
 }
 // ---------------------------------------------------------------------------
 // Guards (M3, M5)
@@ -221,8 +222,10 @@ export async function startMergeOrchestrator(config) {
     const pollIntervalMs = config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     const drainTimeoutMs = config.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS;
     const mergerPath = mergerWorktreePathFor(config.repoRoot, config.teamName);
-    // Validate paths stay under repoRoot (defence-in-depth).
-    validateResolvedPath(mergerPath, config.repoRoot);
+    // Validate paths stay under the shared OMC team root (defence-in-depth).
+    // mergerPath lives under getOmcRoot(...)/team, which in a .omc-workspace
+    // layout is ABOVE repoRoot — validating against repoRoot would false-positive.
+    validateResolvedPath(mergerPath, join(getOmcRoot(config.repoRoot), 'team'));
     // Bootstrap merger worktree + leader inbox.
     ensureMergerWorktree(config.repoRoot, mergerPath, config.leaderBranch);
     await ensureLeaderInbox(config.teamName, config.cwd);

@@ -13,10 +13,11 @@ import { loadConfig } from '../../config/loader.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmuxExec } from '../tmux-utils.js';
+import { getOmcRoot } from '../../lib/worktree-paths.js';
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const MIN_WORKER_COUNT = 1;
 const MAX_WORKER_COUNT = 20;
-const VALID_TEAM_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini']);
+const VALID_TEAM_CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini', 'grok']);
 const DEFAULT_TEAM_CLI_AGENT_TYPE = 'claude';
 const TEAM_HELP = `
 Usage: omc team [N:agent-type[:role]] [--new-window] [--auto-merge] [--no-decompose] "<task description>"
@@ -203,7 +204,7 @@ function slugifyTask(task) {
 }
 export function resolveAvailableTeamName(baseName, cwd) {
     const sanitizedBase = slugifyTask(baseName);
-    const stateRoot = join(cwd, '.omc', 'state', 'team');
+    const stateRoot = join(getOmcRoot(cwd), 'state', 'team');
     const teamDir = (name) => join(stateRoot, name);
     if (!existsSync(teamDir(sanitizedBase)))
         return sanitizedBase;

@@ -30,6 +30,8 @@ describe('session-start.mjs — plugin cache cleanup uses symlinks', () => {
 
     // Create fake project directory with .omc
     mkdirSync(join(fakeProject, '.omc', 'state'), { recursive: true });
+    // session-start validateCwd requires a real workspace anchor (.git / .omc-workspace)
+    mkdirSync(join(fakeProject, '.git'), { recursive: true });
 
     // Create fake cache base
     mkdirSync(fakeCacheBase, { recursive: true });
