@@ -4,7 +4,7 @@
  * Renders heuristic-based permission pending indicator.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { dim, yellow } from '../colors.js';
+import { dim, appleOrange } from '../colors.js';
 /**
  * Render permission pending indicator.
  *
@@ -13,6 +13,6 @@ import { dim, yellow } from '../colors.js';
 export function renderPermission(pending, labels = DEFAULT_HUD_LABELS) {
     if (!pending)
         return null;
-    return `${yellow(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
+    return `${appleOrange(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
 }
 //# sourceMappingURL=permission.js.map

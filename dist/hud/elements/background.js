@@ -6,9 +6,7 @@
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { RESET } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
-const CYAN = '\x1b[36m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
+import { APPLE_CYAN, APPLE_GREEN, APPLE_ORANGE } from '../colors.js';
 const DIM = '\x1b[2m';
 const MAX_CONCURRENT = 5;
 /**
@@ -25,13 +23,13 @@ export function renderBackground(tasks, labels = DEFAULT_HUD_LABELS) {
     // Color based on capacity usage
     let color;
     if (running >= MAX_CONCURRENT) {
-        color = YELLOW; // At capacity
+        color = APPLE_ORANGE; // At capacity
     }
     else if (running >= MAX_CONCURRENT - 1) {
-        color = CYAN; // Near capacity
+        color = APPLE_CYAN; // Near capacity
     }
     else {
-        color = GREEN; // Plenty of room
+        color = APPLE_GREEN; // Plenty of room
     }
     return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
 }
@@ -48,13 +46,13 @@ export function renderBackgroundDetailed(tasks, labels = DEFAULT_HUD_LABELS) {
     // Color based on capacity
     let color;
     if (running.length >= MAX_CONCURRENT) {
-        color = YELLOW;
+        color = APPLE_ORANGE;
     }
     else if (running.length >= MAX_CONCURRENT - 1) {
-        color = CYAN;
+        color = APPLE_CYAN;
     }
     else {
-        color = GREEN;
+        color = APPLE_GREEN;
     }
     // Get short descriptions
     const descriptions = running.slice(0, 3).map((t) => {

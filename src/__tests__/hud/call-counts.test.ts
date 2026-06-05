@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderCallCounts } from '../../hud/elements/call-counts.js';
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS } from '../../hud/types.js';
+
+// On Windows, auto mode picks ASCII. Mock to non-Windows so default tests get emoji.
+vi.mock('../../platform/index.js', () => ({ isWSL: () => false }));
+const originalPlatform = process.platform;
+Object.defineProperty(process, 'platform', { value: 'linux' });
 
 describe('renderCallCounts', () => {
   describe('basic rendering', () => {
@@ -59,7 +64,13 @@ describe('renderCallCounts', () => {
   describe('output format', () => {
     it('supports explicit ASCII rendering overrides', () => {
       const result = renderCallCounts(5, 2, 1, 'ascii');
-      expect(result).toBe('T:5 A:2 S:1');
+      // ASCII labels use APPLE_GRAY color codes
+      expect(result).toContain('T:');
+      expect(result).toContain('5');
+      expect(result).toContain('A:');
+      expect(result).toContain('2');
+      expect(result).toContain('S:');
+      expect(result).toContain('1');
     });
 
     it('supports explicit emoji rendering overrides', () => {

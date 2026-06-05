@@ -5,7 +5,7 @@
  * threshold. Supports an autoCompact mode that queues a /compact request.
  */
 
-import { RESET, APPLE_ORANGE, APPLE_RED } from '../colors.js';
+import { RESET, APPLE_ORANGE, APPLE_RED, APPLE_YELLOW } from '../colors.js';
 import type { PayloadEstimate } from '../payload-estimate.js';
 
 const BOLD = '\x1b[1m';
@@ -52,7 +52,7 @@ export function renderPayloadLimitWarning(
   }
 
   const isCritical = payloadEstimate.pressure === 'critical';
-  const color = isCritical ? RED : YELLOW;
+  const color = isCritical ? APPLE_RED : APPLE_YELLOW;
   const icon = isCritical ? '!!' : '!';
   const action = isCritical
     ? 'compact may fail; consider new session'

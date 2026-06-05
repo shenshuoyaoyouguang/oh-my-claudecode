@@ -4,11 +4,8 @@
  * Renders todo progress display.
  */
 import { DEFAULT_HUD_LABELS } from "../types.js";
-import { RESET } from "../colors.js";
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_CYAN } from "../colors.js";
 import { truncateToWidth } from "../../utils/string-width.js";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const CYAN = "\x1b[36m";
 const DIM = "\x1b[2m";
 /**
  * Render todo progress.
@@ -26,13 +23,13 @@ export function renderTodos(todos) {
     let color;
     const percent = (completed / total) * 100;
     if (percent >= 80) {
-        color = GREEN;
+        color = APPLE_GREEN;
     }
     else if (percent >= 50) {
-        color = YELLOW;
+        color = APPLE_ORANGE;
     }
     else {
-        color = CYAN;
+        color = APPLE_CYAN;
     }
     return `todos:${color}${completed}/${total}${RESET}`;
 }
@@ -52,13 +49,13 @@ export function renderTodosWithCurrent(todos, labels = DEFAULT_HUD_LABELS) {
     const percent = (completed / total) * 100;
     let color;
     if (percent >= 80) {
-        color = GREEN;
+        color = APPLE_GREEN;
     }
     else if (percent >= 50) {
-        color = YELLOW;
+        color = APPLE_ORANGE;
     }
     else {
-        color = CYAN;
+        color = APPLE_CYAN;
     }
     let result = `todos:${color}${completed}/${total}${RESET}`;
     if (inProgress) {

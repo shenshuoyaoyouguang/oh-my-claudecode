@@ -3,13 +3,7 @@
  *
  * Renders autopilot phase and progress display.
  */
-import { RESET } from '../colors.js';
-// ANSI color codes
-const CYAN = '\x1b[36m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const MAGENTA = '\x1b[35m';
+import { RESET, APPLE_CYAN, APPLE_GREEN, APPLE_ORANGE, APPLE_RED, APPLE_PURPLE, APPLE_BLUE } from '../colors.js';
 const PHASE_NAMES = {
     expansion: 'Expand',
     planning: 'Plan',
@@ -45,28 +39,28 @@ export function renderAutopilot(state, _thresholds) {
     let phaseColor;
     switch (phase) {
         case 'complete':
-            phaseColor = GREEN;
+            phaseColor = APPLE_GREEN;
             break;
         case 'failed':
-            phaseColor = RED;
+            phaseColor = APPLE_RED;
             break;
         case 'validation':
-            phaseColor = MAGENTA;
+            phaseColor = APPLE_PURPLE;
             break;
         case 'qa':
-            phaseColor = YELLOW;
+            phaseColor = APPLE_ORANGE;
             break;
         default:
-            phaseColor = CYAN;
+            phaseColor = APPLE_BLUE;
     }
-    let output = `${CYAN}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
+    let output = `${APPLE_CYAN}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
     // Add iteration count if not first iteration
     if (iteration > 1) {
         output += ` (iter ${iteration}/${maxIterations})`;
     }
     // Add task progress if in execution phase
     if (phase === 'execution' && tasksTotal && tasksTotal > 0) {
-        const taskColor = tasksCompleted === tasksTotal ? GREEN : YELLOW;
+        const taskColor = tasksCompleted === tasksTotal ? APPLE_GREEN : APPLE_ORANGE;
         output += ` | Tasks: ${taskColor}${tasksCompleted || 0}/${tasksTotal}${RESET}`;
     }
     // Add file count if available
@@ -87,11 +81,11 @@ export function renderAutopilotCompact(state) {
     const { phase } = state;
     const phaseNum = PHASE_INDEX[phase] || 0;
     if (phase === 'complete') {
-        return `${GREEN}AP:Done${RESET}`;
+        return `${APPLE_GREEN}AP:Done${RESET}`;
     }
     if (phase === 'failed') {
-        return `${RED}AP:Fail${RESET}`;
+        return `${APPLE_RED}AP:Fail${RESET}`;
     }
-    return `${CYAN}AP:${phaseNum}/5${RESET}`;
+    return `${APPLE_BLUE}AP:${phaseNum}/5${RESET}`;
 }
 //# sourceMappingURL=autopilot.js.map

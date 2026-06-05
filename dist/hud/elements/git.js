@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { dim, cyan, green, red } from '../colors.js';
+import { APPLE_CYAN, APPLE_GREEN, APPLE_RED, APPLE_GRAY, RESET } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 const CACHE_TTL_MS = 30_000;
 const repoCache = new Map();
@@ -138,7 +138,7 @@ export function renderGitRepo(cwd) {
     const repo = getGitRepoName(cwd);
     if (!repo)
         return null;
-    return `${dim('repo:')}${cyan(repo)}`;
+    return `${APPLE_GRAY}repo:${RESET}${APPLE_CYAN}${repo}${RESET}`;
 }
 /**
  * Render git branch element.
@@ -154,9 +154,9 @@ export function renderGitBranch(cwd) {
         return null;
     const wtInfo = getWorktreeInfo(cwd);
     if (wtInfo.isWorktree && wtInfo.worktreeName) {
-        return `${dim('branch:')}${cyan(branch)} ${dim('(wt:')}${cyan(wtInfo.worktreeName)}${dim(')')}`;
+        return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET} ${APPLE_GRAY}(wt:${RESET}${APPLE_CYAN}${wtInfo.worktreeName}${RESET}${APPLE_GRAY})${RESET}`;
     }
-    return `${dim('branch:')}${cyan(branch)}`;
+    return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET}`;
 }
 /**
  * Get git working tree status counts.
@@ -228,15 +228,15 @@ export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS) {
     }
     const parts = [];
     if (staged > 0)
-        parts.push(`${green(labels.staged)}${staged}`);
+        parts.push(`${APPLE_GREEN}${labels.staged}${staged}${RESET}`);
     if (modified > 0)
-        parts.push(`${red(labels.modified)}${modified}`);
+        parts.push(`${APPLE_RED}${labels.modified}${modified}${RESET}`);
     if (untracked > 0)
-        parts.push(`${cyan(labels.untracked)}${untracked}`);
+        parts.push(`${APPLE_CYAN}${labels.untracked}${untracked}${RESET}`);
     if (ahead > 0)
-        parts.push(`${green(labels.ahead)}${ahead}`);
+        parts.push(`${APPLE_GREEN}${labels.ahead}${ahead}${RESET}`);
     if (behind > 0)
-        parts.push(`${red(labels.behind)}${behind}`);
+        parts.push(`${APPLE_RED}${labels.behind}${behind}${RESET}`);
     return parts.join(' ');
 }
 //# sourceMappingURL=git.js.map

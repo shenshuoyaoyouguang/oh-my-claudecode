@@ -3,6 +3,9 @@
  *
  * Terminal color codes for statusline rendering.
  * Based on claude-hud reference implementation.
+ *
+ * Apple Terminal palette uses 24-bit true color (ESC[38;2;R;G;Bm)
+ * for precise color matching to Apple's design system.
  */
 // ANSI escape codes
 export const RESET = '\x1b[0m';
@@ -18,6 +21,27 @@ const WHITE = '\x1b[37m';
 const BRIGHT_BLUE = '\x1b[94m';
 const BRIGHT_MAGENTA = '\x1b[95m';
 const BRIGHT_CYAN = '\x1b[96m';
+// ── Apple Terminal true-color palette ─────────────────────────────
+const APPLE_GREEN = '\x1b[38;2;48;209;88m'; // #30D158
+const APPLE_YELLOW = '\x1b[38;2;255;214;10m'; // #FFD60A
+const APPLE_ORANGE = '\x1b[38;2;255;159;10m'; // #FF9F0A
+const APPLE_RED = '\x1b[38;2;255;69;58m'; // #FF453A
+const APPLE_BLUE = '\x1b[38;2;10;132;255m'; // #0A84FF
+const APPLE_PURPLE = '\x1b[38;2;191;90;242m'; // #BF5AF2
+const APPLE_CYAN = '\x1b[38;2;100;210;255m'; // #64D2FF
+const APPLE_GRAY = '\x1b[38;2;152;152;157m'; // #98989D
+const APPLE_TEAL = '\x1b[38;2;108;204;192m'; // #6CCCC0
+// Apple color functions
+export function appleGreen(text) { return `${APPLE_GREEN}${text}${RESET}`; }
+export function appleYellow(text) { return `${APPLE_YELLOW}${text}${RESET}`; }
+export function appleOrange(text) { return `${APPLE_ORANGE}${text}${RESET}`; }
+export function appleRed(text) { return `${APPLE_RED}${text}${RESET}`; }
+export function appleBlue(text) { return `${APPLE_BLUE}${text}${RESET}`; }
+export function applePurple(text) { return `${APPLE_PURPLE}${text}${RESET}`; }
+export function appleCyan(text) { return `${APPLE_CYAN}${text}${RESET}`; }
+export function appleGray(text) { return `${APPLE_GRAY}${text}${RESET}`; }
+export function appleTeal(text) { return `${APPLE_TEAL}${text}${RESET}`; }
+export { APPLE_GREEN, APPLE_YELLOW, APPLE_ORANGE, APPLE_RED, APPLE_BLUE, APPLE_PURPLE, APPLE_CYAN, APPLE_GRAY, APPLE_TEAL };
 // ============================================================================
 // Color Functions
 // ============================================================================

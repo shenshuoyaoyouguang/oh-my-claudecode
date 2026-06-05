@@ -4,20 +4,17 @@
  * Renders billing-period cumulative spend for Claude Enterprise subscribers.
  * Shows spent:$X,XXX.XX when unlimited, or spent:$X.XX/$Y.YY (Z%) when capped.
  */
-import { RESET } from '../colors.js';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_RED } from '../colors.js';
 const DIM = '\x1b[2m';
 // Thresholds matching limits.ts for consistency
 const WARNING_THRESHOLD = 70;
 const CRITICAL_THRESHOLD = 90;
 function getColor(percent) {
     if (percent >= CRITICAL_THRESHOLD)
-        return RED;
+        return APPLE_RED;
     if (percent >= WARNING_THRESHOLD)
-        return YELLOW;
-    return GREEN;
+        return APPLE_ORANGE;
+    return APPLE_GREEN;
 }
 /**
  * Format a monetary amount with thousands-separator commas and 2 decimal places.

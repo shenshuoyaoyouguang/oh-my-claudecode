@@ -4,8 +4,7 @@
  * Renders extended thinking mode indicator with configurable format.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
-const CYAN = '\x1b[36m';
+import { RESET, APPLE_CYAN } from '../colors.js';
 /**
  * Render thinking indicator based on format.
  *
@@ -24,7 +23,7 @@ export function renderThinking(state, format = 'text', labels = DEFAULT_HUD_LABE
         case 'face':
             return '🤔';
         case 'text':
-            return `${CYAN}${labels.thinking}${RESET}`;
+            return `${APPLE_CYAN}${labels.thinking}${RESET}`;
         default:
             return '💭';
     }

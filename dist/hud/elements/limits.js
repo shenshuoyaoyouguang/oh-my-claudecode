@@ -4,10 +4,7 @@
  * Renders 5-hour and weekly rate limit usage display (built-in providers),
  * and custom rate limit buckets from the rateLimitsProvider command.
  */
-import { RESET } from '../colors.js';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
+import { RESET, APPLE_GREEN, APPLE_ORANGE, APPLE_RED } from '../colors.js';
 const DIM = '\x1b[2m';
 // Thresholds for rate limit warnings
 const WARNING_THRESHOLD = 70;
@@ -17,12 +14,12 @@ const CRITICAL_THRESHOLD = 90;
  */
 function getColor(percent) {
     if (percent >= CRITICAL_THRESHOLD) {
-        return RED;
+        return APPLE_RED;
     }
     else if (percent >= WARNING_THRESHOLD) {
-        return YELLOW;
+        return APPLE_ORANGE;
     }
-    return GREEN;
+    return APPLE_GREEN;
 }
 /**
  * Format reset time as human-readable duration.
@@ -252,8 +249,8 @@ export function renderRateLimitsError(result) {
         return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
     }
     if (result.error === 'auth')
-        return `${YELLOW}[API auth]${RESET}`;
-    return `${YELLOW}[API err]${RESET}`;
+        return `${APPLE_ORANGE}[API auth]${RESET}`;
+    return `${APPLE_ORANGE}[API err]${RESET}`;
 }
 // ============================================================================
 // Custom provider bucket rendering
@@ -294,7 +291,7 @@ function renderBucketUsageValue(usage) {
 export function renderCustomBuckets(result, thresholdPercent = 85) {
     // Command failed and no cached data
     if (result.error && result.buckets.length === 0) {
-        return `${YELLOW}[cmd:err]${RESET}`;
+        return `${APPLE_ORANGE}[cmd:err]${RESET}`;
     }
     if (result.buckets.length === 0)
         return null;

@@ -354,6 +354,7 @@ export type CwdFormat = 'relative' | 'absolute' | 'folder';
  */
 export type ModelFormat = 'short' | 'versioned' | 'full';
 export type CallCountsFormat = 'auto' | 'emoji' | 'ascii';
+export type TokenFormat = 'detailed' | 'total';
 export type HudLocale = 'en' | 'zh-CN';
 export interface HudLabels {
     context: string;
@@ -421,6 +422,7 @@ export interface HudElementConfig {
     showSessionDuration?: boolean;
     showHealthIndicator?: boolean;
     showTokens?: boolean;
+    tokenFormat?: TokenFormat;
     enterpriseMode?: boolean;
     showEnterpriseCost?: boolean;
     useBars: boolean;

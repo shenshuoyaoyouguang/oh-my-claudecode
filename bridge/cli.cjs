@@ -15239,7 +15239,15 @@ var init_types4 = __esm({
       modified: "!",
       untracked: "?",
       ahead: "\u21E1",
-      behind: "\u21E3"
+      behind: "\u21E3",
+      critical: "CRITICAL",
+      compress: "COMPRESS?",
+      approve: "APPROVE?",
+      working: "working",
+      tokenInput: "i",
+      tokenOutput: "o",
+      tokenReasoning: "r",
+      tokenSession: "s"
     };
     HUD_LOCALE_LABELS = {
       en: DEFAULT_HUD_LABELS,
@@ -15257,7 +15265,15 @@ var init_types4 = __esm({
         modified: "\u5DF2\u4FEE\u6539",
         untracked: "\u672A\u8DDF\u8E2A",
         ahead: "\u9886\u5148",
-        behind: "\u843D\u540E"
+        behind: "\u843D\u540E",
+        critical: "\u5371\u9669",
+        compress: "\u538B\u7F29\u4E00\u4E0B\uFF1F",
+        approve: "\u5141\u8BB8\uFF1F",
+        working: "\u8FDB\u884C\u4E2D",
+        tokenInput: "\u5165",
+        tokenOutput: "\u51FA",
+        tokenReasoning: "\u601D",
+        tokenSession: "\u603B"
       }
     };
     HUD_LABEL_KEYS = Object.freeze(
@@ -44493,7 +44509,19 @@ var init_usage_api = __esm({
 });
 
 // src/cli/utils/formatting.ts
-function formatTokenCount(tokens) {
+function formatTokenCount(tokens, locale) {
+  if (locale === "zh-CN") {
+    if (tokens < 1e3) return `${tokens}`;
+    if (tokens < 1e4) {
+      const val = tokens / 1e3;
+      return `${val < 10 ? val.toFixed(1) : Math.round(val)}\u5343`;
+    }
+    if (tokens < 1e8) {
+      const val = tokens / 1e4;
+      return `${val < 100 ? val.toFixed(1) : Math.round(val)}\u4E07`;
+    }
+    return `${(tokens / 1e8).toFixed(1)}\u4EBF`;
+  }
   if (tokens < 1e3) return `${tokens}`;
   if (tokens < 1e6) return `${(tokens / 1e3).toFixed(1)}k`;
   return `${(tokens / 1e6).toFixed(2)}M`;
@@ -45545,14 +45573,14 @@ var init_custom_rate_provider = __esm({
 });
 
 // src/hud/colors.ts
-function green(text) {
-  return `${GREEN}${text}${RESET}`;
+function appleGreen(text) {
+  return `${APPLE_GREEN}${text}${RESET}`;
 }
-function yellow(text) {
-  return `${YELLOW}${text}${RESET}`;
+function appleOrange(text) {
+  return `${APPLE_ORANGE}${text}${RESET}`;
 }
-function red(text) {
-  return `${RED}${text}${RESET}`;
+function appleRed(text) {
+  return `${APPLE_RED}${text}${RESET}`;
 }
 function cyan(text) {
   return `${CYAN}${text}${RESET}`;
@@ -45577,7 +45605,7 @@ function getDurationColor(durationMs) {
   if (minutes >= 2) return YELLOW;
   return GREEN;
 }
-var RESET, DIM, BOLD, RED, GREEN, YELLOW, MAGENTA, CYAN;
+var RESET, DIM, BOLD, RED, GREEN, YELLOW, MAGENTA, CYAN, APPLE_GREEN, APPLE_YELLOW, APPLE_ORANGE, APPLE_RED, APPLE_BLUE, APPLE_PURPLE, APPLE_CYAN, APPLE_GRAY;
 var init_colors = __esm({
   "src/hud/colors.ts"() {
     "use strict";
@@ -45589,6 +45617,14 @@ var init_colors = __esm({
     YELLOW = "\x1B[33m";
     MAGENTA = "\x1B[35m";
     CYAN = "\x1B[36m";
+    APPLE_GREEN = "\x1B[38;2;48;209;88m";
+    APPLE_YELLOW = "\x1B[38;2;255;214;10m";
+    APPLE_ORANGE = "\x1B[38;2;255;159;10m";
+    APPLE_RED = "\x1B[38;2;255;69;58m";
+    APPLE_BLUE = "\x1B[38;2;10;132;255m";
+    APPLE_PURPLE = "\x1B[38;2;191;90;242m";
+    APPLE_CYAN = "\x1B[38;2;100;210;255m";
+    APPLE_GRAY = "\x1B[38;2;152;152;157m";
   }
 });
 
@@ -45602,23 +45638,19 @@ function renderRalph(state, thresholds, labels = DEFAULT_HUD_LABELS) {
   const criticalThreshold = Math.floor(maxIterations * 0.9);
   let color;
   if (iteration >= criticalThreshold) {
-    color = RED2;
+    color = APPLE_RED;
   } else if (iteration >= warningThreshold) {
-    color = YELLOW2;
+    color = APPLE_ORANGE;
   } else {
-    color = GREEN2;
+    color = APPLE_GREEN;
   }
   return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;
 }
-var RED2, YELLOW2, GREEN2;
 var init_ralph2 = __esm({
   "src/hud/elements/ralph.ts"() {
     "use strict";
     init_types4();
     init_colors();
-    RED2 = "\x1B[31m";
-    YELLOW2 = "\x1B[33m";
-    GREEN2 = "\x1B[32m";
   }
 });
 
@@ -46001,7 +46033,7 @@ var init_agents = __esm({
 });
 
 // src/hud/elements/todos.ts
-function renderTodosWithCurrent(todos) {
+function renderTodosWithCurrent(todos, labels = DEFAULT_HUD_LABELS) {
   if (todos.length === 0) {
     return null;
   }
@@ -46011,29 +46043,27 @@ function renderTodosWithCurrent(todos) {
   const percent = completed / total * 100;
   let color;
   if (percent >= 80) {
-    color = GREEN3;
+    color = APPLE_GREEN;
   } else if (percent >= 50) {
-    color = YELLOW3;
+    color = APPLE_ORANGE;
   } else {
-    color = CYAN3;
+    color = APPLE_CYAN;
   }
   let result = `todos:${color}${completed}/${total}${RESET}`;
   if (inProgress) {
     const activeText = inProgress.activeForm || inProgress.content || "...";
     const truncated = truncateToWidth(activeText, 30);
-    result += ` ${DIM2}(working: ${truncated})${RESET}`;
+    result += ` ${DIM2}(${labels.working}: ${truncated})${RESET}`;
   }
   return result;
 }
-var GREEN3, YELLOW3, CYAN3, DIM2;
+var DIM2;
 var init_todos = __esm({
   "src/hud/elements/todos.ts"() {
     "use strict";
+    init_types4();
     init_colors();
     init_string_width();
-    GREEN3 = "\x1B[32m";
-    YELLOW3 = "\x1B[33m";
-    CYAN3 = "\x1B[36m";
     DIM2 = "\x1B[2m";
   }
 });
@@ -46054,16 +46084,16 @@ function isActiveMode(skillName, ultrawork, ralph) {
 function renderSkills(ultrawork, ralph, lastSkill) {
   const parts = [];
   if (ralph?.active && ultrawork?.active) {
-    parts.push(`${BRIGHT_MAGENTA}ultrawork+ralph${RESET}`);
+    parts.push(`${APPLE_PURPLE}ultrawork+ralph${RESET}`);
   } else if (ultrawork?.active) {
-    parts.push(`${MAGENTA2}ultrawork${RESET}`);
+    parts.push(`${APPLE_PURPLE}ultrawork${RESET}`);
   } else if (ralph?.active) {
-    parts.push(`${MAGENTA2}ralph${RESET}`);
+    parts.push(`${APPLE_PURPLE}ralph${RESET}`);
   }
   if (lastSkill && !isActiveMode(lastSkill.name, ultrawork, ralph)) {
     const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : "";
     const displayName = getSkillDisplayName(lastSkill.name);
-    parts.push(cyan(`skill:${displayName}${argsDisplay}`));
+    parts.push(`${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`);
   }
   return parts.length > 0 ? parts.join(" ") : null;
 }
@@ -46071,16 +46101,13 @@ function renderLastSkill(lastSkill) {
   if (!lastSkill) return null;
   const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : "";
   const displayName = getSkillDisplayName(lastSkill.name);
-  return cyan(`skill:${displayName}${argsDisplay}`);
+  return `${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`;
 }
-var MAGENTA2, BRIGHT_MAGENTA;
 var init_skills = __esm({
   "src/hud/elements/skills.ts"() {
     "use strict";
     init_colors();
     init_string_width();
-    MAGENTA2 = "\x1B[35m";
-    BRIGHT_MAGENTA = "\x1B[95m";
   }
 });
 
@@ -46100,17 +46127,17 @@ function getContextSeverity(safePercent, thresholds) {
   }
   return "normal";
 }
-function getContextDisplayStyle(safePercent, thresholds) {
+function getContextDisplayStyle(safePercent, thresholds, labels = DEFAULT_HUD_LABELS) {
   const severity = getContextSeverity(safePercent, thresholds);
   switch (severity) {
     case "critical":
-      return { color: RED3, suffix: " CRITICAL" };
+      return { color: APPLE_RED, suffix: ` ${labels.critical}` };
     case "compact":
-      return { color: YELLOW4, suffix: " COMPRESS?" };
+      return { color: APPLE_ORANGE, suffix: ` ${labels.compress}` };
     case "warning":
-      return { color: YELLOW4, suffix: "" };
+      return { color: APPLE_ORANGE, suffix: "" };
     default:
-      return { color: GREEN4, suffix: "" };
+      return { color: APPLE_GREEN, suffix: "" };
   }
 }
 function getStableContextDisplayPercent(percent, thresholds, displayScope) {
@@ -46146,26 +46173,23 @@ function getStableContextDisplayPercent(percent, thresholds, displayScope) {
 }
 function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
 }
 function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const filled = Math.round(safePercent / 100 * barWidth);
   const empty = barWidth - filled;
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   const bar = `${color}${"\u2588".repeat(filled)}${DIM3}${"\u2591".repeat(empty)}${RESET}`;
   return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
-var GREEN4, YELLOW4, RED3, DIM3, CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
+var DIM3, CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
 var init_context = __esm({
   "src/hud/elements/context.ts"() {
     "use strict";
     init_types4();
     init_colors();
-    GREEN4 = "\x1B[32m";
-    YELLOW4 = "\x1B[33m";
-    RED3 = "\x1B[31m";
     DIM3 = "\x1B[2m";
     CONTEXT_DISPLAY_HYSTERESIS = 2;
     CONTEXT_DISPLAY_STATE_TTL_MS = 5e3;
@@ -46184,24 +46208,22 @@ function renderBackground(tasks, labels = DEFAULT_HUD_LABELS) {
   }
   let color;
   if (running >= MAX_CONCURRENT) {
-    color = YELLOW5;
+    color = APPLE_ORANGE;
   } else if (running >= MAX_CONCURRENT - 1) {
-    color = CYAN4;
+    color = APPLE_CYAN;
   } else {
-    color = GREEN5;
+    color = APPLE_GREEN;
   }
   return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
 }
-var CYAN4, GREEN5, YELLOW5, MAX_CONCURRENT;
+var MAX_CONCURRENT;
 var init_background = __esm({
   "src/hud/elements/background.ts"() {
     "use strict";
     init_types4();
     init_colors();
     init_string_width();
-    CYAN4 = "\x1B[36m";
-    GREEN5 = "\x1B[32m";
-    YELLOW5 = "\x1B[33m";
+    init_colors();
     MAX_CONCURRENT = 5;
   }
 });
@@ -46213,31 +46235,31 @@ function renderPrd(state) {
   }
   const { currentStoryId, completed, total } = state;
   if (completed === total) {
-    return `${GREEN6}PRD:done${RESET}`;
+    return `${GREEN2}PRD:done${RESET}`;
   }
   if (currentStoryId) {
-    return `${CYAN5}${currentStoryId}${RESET}`;
+    return `${CYAN3}${currentStoryId}${RESET}`;
   }
   return null;
 }
-var CYAN5, GREEN6;
+var CYAN3, GREEN2;
 var init_prd2 = __esm({
   "src/hud/elements/prd.ts"() {
     "use strict";
     init_colors();
-    CYAN5 = "\x1B[36m";
-    GREEN6 = "\x1B[32m";
+    CYAN3 = "\x1B[36m";
+    GREEN2 = "\x1B[32m";
   }
 });
 
 // src/hud/elements/limits.ts
 function getColor(percent) {
   if (percent >= CRITICAL_THRESHOLD2) {
-    return RED4;
+    return APPLE_RED;
   } else if (percent >= WARNING_THRESHOLD) {
-    return YELLOW6;
+    return APPLE_ORANGE;
   }
-  return GREEN7;
+  return APPLE_GREEN;
 }
 function formatResetTime(date3) {
   if (!date3) return null;
@@ -46373,8 +46395,8 @@ function renderRateLimitsError(result) {
   if (result.error === "rate_limited") {
     return result.rateLimits ? null : `${DIM4}[API 429]${RESET}`;
   }
-  if (result.error === "auth") return `${YELLOW6}[API auth]${RESET}`;
-  return `${YELLOW6}[API err]${RESET}`;
+  if (result.error === "auth") return `${APPLE_ORANGE}[API auth]${RESET}`;
+  return `${APPLE_ORANGE}[API err]${RESET}`;
 }
 function bucketUsagePercent(usage) {
   if (usage.type === "percent") return usage.value;
@@ -46388,7 +46410,7 @@ function renderBucketUsageValue(usage) {
 }
 function renderCustomBuckets(result, thresholdPercent = 85) {
   if (result.error && result.buckets.length === 0) {
-    return `${YELLOW6}[cmd:err]${RESET}`;
+    return `${APPLE_ORANGE}[cmd:err]${RESET}`;
   }
   if (result.buckets.length === 0) return null;
   const staleMarker = result.stale ? `${DIM4}*${RESET}` : "";
@@ -46409,14 +46431,11 @@ function renderCustomBuckets(result, thresholdPercent = 85) {
   });
   return parts.join(" ");
 }
-var GREEN7, YELLOW6, RED4, DIM4, WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
+var DIM4, WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
 var init_limits = __esm({
   "src/hud/elements/limits.ts"() {
     "use strict";
     init_colors();
-    GREEN7 = "\x1B[32m";
-    YELLOW6 = "\x1B[33m";
-    RED4 = "\x1B[31m";
     DIM4 = "\x1B[2m";
     WARNING_THRESHOLD = 70;
     CRITICAL_THRESHOLD2 = 90;
@@ -46424,13 +46443,14 @@ var init_limits = __esm({
 });
 
 // src/hud/elements/permission.ts
-function renderPermission(pending) {
+function renderPermission(pending, labels = DEFAULT_HUD_LABELS) {
   if (!pending) return null;
-  return `${yellow("APPROVE?")} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
+  return `${appleOrange(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
 }
 var init_permission = __esm({
   "src/hud/elements/permission.ts"() {
     "use strict";
+    init_types4();
     init_colors();
   }
 });
@@ -46446,25 +46466,23 @@ function renderThinking(state, format = "text", labels = DEFAULT_HUD_LABELS) {
     case "face":
       return "\u{1F914}";
     case "text":
-      return `${CYAN6}${labels.thinking}${RESET}`;
+      return `${APPLE_CYAN}${labels.thinking}${RESET}`;
     default:
       return "\u{1F4AD}";
   }
 }
-var CYAN6;
 var init_thinking = __esm({
   "src/hud/elements/thinking.ts"() {
     "use strict";
     init_types4();
     init_colors();
-    CYAN6 = "\x1B[36m";
   }
 });
 
 // src/hud/elements/session.ts
 function renderSession(session) {
   if (!session) return null;
-  const colorize = session.health === "critical" ? red : session.health === "warning" ? yellow : green;
+  const colorize = session.health === "critical" ? appleRed : session.health === "warning" ? appleOrange : appleGreen;
   return `session:${colorize(`${session.durationMinutes}m`)}`;
 }
 var init_session = __esm({
@@ -46475,18 +46493,21 @@ var init_session = __esm({
 });
 
 // src/hud/elements/token-usage.ts
-function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS) {
+function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS, locale, tokenFormat = "detailed") {
   if (!usage) return null;
   const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
   if (!hasUsage) return null;
+  if (tokenFormat === "total" && sessionTotalTokens && sessionTotalTokens > 0) {
+    return `\u03A3${formatTokenCount(sessionTotalTokens, locale)}`;
+  }
   const parts = [
-    `${labels.tokens}:i${formatTokenCount(usage.inputTokens)}/o${formatTokenCount(usage.outputTokens)}`
+    `\u2193${formatTokenCount(usage.inputTokens, locale)} \u2191${formatTokenCount(usage.outputTokens, locale)}`
   ];
   if (usage.reasoningTokens && usage.reasoningTokens > 0) {
-    parts.push(`r${formatTokenCount(usage.reasoningTokens)}`);
+    parts.push(`\u2248${formatTokenCount(usage.reasoningTokens, locale)}`);
   }
   if (sessionTotalTokens && sessionTotalTokens > 0) {
-    parts.push(`s${formatTokenCount(sessionTotalTokens)}`);
+    parts.push(`\u03A3${formatTokenCount(sessionTotalTokens, locale)}`);
   }
   return parts.join(" ");
 }
@@ -46500,9 +46521,9 @@ var init_token_usage = __esm({
 
 // src/hud/elements/enterprise-cost.ts
 function getColor2(percent) {
-  if (percent >= CRITICAL_THRESHOLD3) return RED5;
-  if (percent >= WARNING_THRESHOLD2) return YELLOW7;
-  return GREEN8;
+  if (percent >= CRITICAL_THRESHOLD3) return APPLE_RED;
+  if (percent >= WARNING_THRESHOLD2) return APPLE_ORANGE;
+  return APPLE_GREEN;
 }
 function formatMoney(amount) {
   const [intPart, decPart] = amount.toFixed(2).split(".");
@@ -46527,14 +46548,11 @@ function renderEnterpriseCost(limits, stale) {
   const color = getColor2(rounded);
   return `${DIM5}spent:${RESET}${prefix}${spentStr}/${prefix}${limitStr} ${color}(${rounded}%)${RESET}${staleMarker}`;
 }
-var GREEN8, YELLOW7, RED5, DIM5, WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
+var DIM5, WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
 var init_enterprise_cost = __esm({
   "src/hud/elements/enterprise-cost.ts"() {
     "use strict";
     init_colors();
-    GREEN8 = "\x1B[32m";
-    YELLOW7 = "\x1B[33m";
-    RED5 = "\x1B[31m";
     DIM5 = "\x1B[2m";
     WARNING_THRESHOLD2 = 70;
     CRITICAL_THRESHOLD3 = 90;
@@ -46581,26 +46599,26 @@ function renderAutopilot(state, _thresholds) {
   let phaseColor;
   switch (phase) {
     case "complete":
-      phaseColor = GREEN9;
+      phaseColor = APPLE_GREEN;
       break;
     case "failed":
-      phaseColor = RED6;
+      phaseColor = APPLE_RED;
       break;
     case "validation":
-      phaseColor = MAGENTA3;
+      phaseColor = APPLE_PURPLE;
       break;
     case "qa":
-      phaseColor = YELLOW8;
+      phaseColor = APPLE_ORANGE;
       break;
     default:
-      phaseColor = CYAN7;
+      phaseColor = APPLE_BLUE;
   }
-  let output = `${CYAN7}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
+  let output = `${APPLE_CYAN}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
   if (iteration > 1) {
     output += ` (iter ${iteration}/${maxIterations})`;
   }
   if (phase === "execution" && tasksTotal && tasksTotal > 0) {
-    const taskColor = tasksCompleted === tasksTotal ? GREEN9 : YELLOW8;
+    const taskColor = tasksCompleted === tasksTotal ? APPLE_GREEN : APPLE_ORANGE;
     output += ` | Tasks: ${taskColor}${tasksCompleted || 0}/${tasksTotal}${RESET}`;
   }
   if (filesCreated && filesCreated > 0) {
@@ -46608,16 +46626,11 @@ function renderAutopilot(state, _thresholds) {
   }
   return output;
 }
-var CYAN7, GREEN9, YELLOW8, RED6, MAGENTA3, PHASE_NAMES, PHASE_INDEX;
+var PHASE_NAMES, PHASE_INDEX;
 var init_autopilot2 = __esm({
   "src/hud/elements/autopilot.ts"() {
     "use strict";
     init_colors();
-    CYAN7 = "\x1B[36m";
-    GREEN9 = "\x1B[32m";
-    YELLOW8 = "\x1B[33m";
-    RED6 = "\x1B[31m";
-    MAGENTA3 = "\x1B[35m";
     PHASE_NAMES = {
       expansion: "Expand",
       planning: "Plan",
@@ -46783,16 +46796,16 @@ function getWorktreeInfo(cwd2) {
 function renderGitRepo(cwd2) {
   const repo = getGitRepoName(cwd2);
   if (!repo) return null;
-  return `${dim("repo:")}${cyan(repo)}`;
+  return `${APPLE_GRAY}repo:${RESET}${APPLE_CYAN}${repo}${RESET}`;
 }
 function renderGitBranch(cwd2) {
   const branch = getGitBranch(cwd2);
   if (!branch) return null;
   const wtInfo = getWorktreeInfo(cwd2);
   if (wtInfo.isWorktree && wtInfo.worktreeName) {
-    return `${dim("branch:")}${cyan(branch)} ${dim("(wt:")}${cyan(wtInfo.worktreeName)}${dim(")")}`;
+    return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET} ${APPLE_GRAY}(wt:${RESET}${APPLE_CYAN}${wtInfo.worktreeName}${RESET}${APPLE_GRAY})${RESET}`;
   }
-  return `${dim("branch:")}${cyan(branch)}`;
+  return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET}`;
 }
 function getGitStatusCounts(cwd2) {
   const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
@@ -46839,11 +46852,11 @@ function renderGitStatus(cwd2, labels = DEFAULT_HUD_LABELS) {
     return null;
   }
   const parts = [];
-  if (staged > 0) parts.push(`${green(labels.staged)}${staged}`);
-  if (modified > 0) parts.push(`${red(labels.modified)}${modified}`);
-  if (untracked > 0) parts.push(`${cyan(labels.untracked)}${untracked}`);
-  if (ahead > 0) parts.push(`${green(labels.ahead)}${ahead}`);
-  if (behind > 0) parts.push(`${red(labels.behind)}${behind}`);
+  if (staged > 0) parts.push(`${APPLE_GREEN}${labels.staged}${staged}${RESET}`);
+  if (modified > 0) parts.push(`${APPLE_RED}${labels.modified}${modified}${RESET}`);
+  if (untracked > 0) parts.push(`${APPLE_CYAN}${labels.untracked}${untracked}${RESET}`);
+  if (ahead > 0) parts.push(`${APPLE_GREEN}${labels.ahead}${ahead}${RESET}`);
+  if (behind > 0) parts.push(`${APPLE_RED}${labels.behind}${behind}${RESET}`);
   return parts.join(" ");
 }
 var import_node_child_process10, import_node_fs13, import_node_path17, CACHE_TTL_MS3, repoCache, branchCache, worktreeCache, statusCache;
@@ -47074,9 +47087,9 @@ function shouldUseAscii(format = "auto") {
 function getIcons(format = "auto", labels = DEFAULT_HUD_LABELS) {
   const useAscii = shouldUseAscii(format);
   return {
-    tool: useAscii ? `${labels.tool}:` : "\u{1F527}",
-    agent: useAscii ? `${labels.agent}:` : "\u{1F916}",
-    skill: useAscii ? `${labels.skill}:` : "\u26A1"
+    tool: useAscii ? `${APPLE_GRAY}${labels.tool}:${"\x1B[0m"}` : "\u{1F527}",
+    agent: useAscii ? `${APPLE_GRAY}${labels.agent}:${"\x1B[0m"}` : "\u{1F916}",
+    skill: useAscii ? `${APPLE_GRAY}${labels.skill}:${"\x1B[0m"}` : "\u26A1"
   };
 }
 function renderCallCounts(toolCalls, agentInvocations, skillUsages, format = "auto", labels = DEFAULT_HUD_LABELS) {
@@ -47098,6 +47111,7 @@ var init_call_counts = __esm({
     "use strict";
     init_platform();
     init_types4();
+    init_colors();
   }
 });
 
@@ -47108,7 +47122,7 @@ function renderContextLimitWarning(contextPercent, threshold, autoCompact) {
     return null;
   }
   const isCritical = safePercent >= 90;
-  const color = isCritical ? RED7 : YELLOW9;
+  const color = isCritical ? APPLE_RED : APPLE_ORANGE;
   const icon = isCritical ? "!!" : "!";
   const action = autoCompact ? "(auto-compact queued)" : "run /compact";
   return `${color}${BOLD2}[${icon}] ctx ${safePercent}% >= ${threshold}% threshold - ${action}${RESET}`;
@@ -47118,18 +47132,16 @@ function renderPayloadLimitWarning(payloadEstimate) {
     return null;
   }
   const isCritical = payloadEstimate.pressure === "critical";
-  const color = isCritical ? RED7 : YELLOW9;
+  const color = isCritical ? APPLE_RED : APPLE_YELLOW;
   const icon = isCritical ? "!!" : "!";
   const action = isCritical ? "compact may fail; consider new session" : "consider /compact soon";
   return `${color}${BOLD2}[${icon}] ${payloadEstimate.label} - ${action}${RESET}`;
 }
-var YELLOW9, RED7, BOLD2;
+var BOLD2;
 var init_context_warning = __esm({
   "src/hud/elements/context-warning.ts"() {
     "use strict";
     init_colors();
-    YELLOW9 = "\x1B[33m";
-    RED7 = "\x1B[31m";
     BOLD2 = "\x1B[1m";
   }
 });
@@ -47344,7 +47356,7 @@ async function render(context, config2) {
     if (custom3) rendered.set("customBuckets", custom3);
   }
   if (enabledElements.permissionStatus && context.pendingPermission) {
-    const permission = renderPermission(context.pendingPermission);
+    const permission = renderPermission(context.pendingPermission, hudLabels);
     if (permission) rendered.set("permission", permission);
   }
   if (enabledElements.thinking && context.thinkingState) {
@@ -47378,7 +47390,9 @@ async function render(context, config2) {
       const tokenUsage = renderTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
-        hudLabels
+        hudLabels,
+        config2.locale,
+        enabledElements.tokenFormat
       );
       if (tokenUsage) rendered.set("tokens", tokenUsage);
     }
@@ -47386,7 +47400,9 @@ async function render(context, config2) {
     const tokenUsage = renderTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
-      hudLabels
+      hudLabels,
+      config2.locale,
+      enabledElements.tokenFormat
     );
     if (tokenUsage) rendered.set("tokens", tokenUsage);
   }
@@ -47479,7 +47495,7 @@ async function render(context, config2) {
   const payloadWarning = renderPayloadLimitWarning(context.payloadEstimate);
   if (payloadWarning) renderedDetail.set("payloadWarning", [payloadWarning]);
   if (enabledElements.todos) {
-    const todos = renderTodosWithCurrent(context.todos);
+    const todos = renderTodosWithCurrent(context.todos, hudLabels);
     if (todos) renderedDetail.set("todos", [todos]);
   }
   const safeArray = (v, fallback) => Array.isArray(v) ? v : fallback;
@@ -47587,7 +47603,7 @@ var init_render = __esm({
     init_last_tool();
     ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
     PLAIN_SEPARATOR = " | ";
-    DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+    DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
   }
 });
 
@@ -48062,7 +48078,7 @@ var {
 var ANSI_BACKGROUND_OFFSET = 10;
 var wrapAnsi16 = (offset = 0) => (code) => `\x1B[${code + offset}m`;
 var wrapAnsi256 = (offset = 0) => (code) => `\x1B[${38 + offset};5;${code}m`;
-var wrapAnsi16m = (offset = 0) => (red2, green2, blue) => `\x1B[${38 + offset};2;${red2};${green2};${blue}m`;
+var wrapAnsi16m = (offset = 0) => (red, green, blue) => `\x1B[${38 + offset};2;${red};${green};${blue}m`;
 var styles = {
   modifier: {
     reset: [0, 0],
@@ -48157,17 +48173,17 @@ function assembleStyles() {
   styles.bgColor.ansi16m = wrapAnsi16m(ANSI_BACKGROUND_OFFSET);
   Object.defineProperties(styles, {
     rgbToAnsi256: {
-      value(red2, green2, blue) {
-        if (red2 === green2 && green2 === blue) {
-          if (red2 < 8) {
+      value(red, green, blue) {
+        if (red === green && green === blue) {
+          if (red < 8) {
             return 16;
           }
-          if (red2 > 248) {
+          if (red > 248) {
             return 231;
           }
-          return Math.round((red2 - 8) / 247 * 24) + 232;
+          return Math.round((red - 8) / 247 * 24) + 232;
         }
-        return 16 + 36 * Math.round(red2 / 255 * 5) + 6 * Math.round(green2 / 255 * 5) + Math.round(blue / 255 * 5);
+        return 16 + 36 * Math.round(red / 255 * 5) + 6 * Math.round(green / 255 * 5) + Math.round(blue / 255 * 5);
       },
       enumerable: false
     },
@@ -48204,25 +48220,25 @@ function assembleStyles() {
         if (code < 16) {
           return 90 + (code - 8);
         }
-        let red2;
-        let green2;
+        let red;
+        let green;
         let blue;
         if (code >= 232) {
-          red2 = ((code - 232) * 10 + 8) / 255;
-          green2 = red2;
-          blue = red2;
+          red = ((code - 232) * 10 + 8) / 255;
+          green = red;
+          blue = red;
         } else {
           code -= 16;
           const remainder = code % 36;
-          red2 = Math.floor(code / 36) / 5;
-          green2 = Math.floor(remainder / 6) / 5;
+          red = Math.floor(code / 36) / 5;
+          green = Math.floor(remainder / 6) / 5;
           blue = remainder % 6 / 5;
         }
-        const value = Math.max(red2, green2, blue) * 2;
+        const value = Math.max(red, green, blue) * 2;
         if (value === 0) {
           return 30;
         }
-        let result = 30 + (Math.round(blue) << 2 | Math.round(green2) << 1 | Math.round(red2));
+        let result = 30 + (Math.round(blue) << 2 | Math.round(green) << 1 | Math.round(red));
         if (value === 2) {
           result += 60;
         }
@@ -48231,7 +48247,7 @@ function assembleStyles() {
       enumerable: false
     },
     rgbToAnsi: {
-      value: (red2, green2, blue) => styles.ansi256ToAnsi(styles.rgbToAnsi256(red2, green2, blue)),
+      value: (red, green, blue) => styles.ansi256ToAnsi(styles.rgbToAnsi256(red, green, blue)),
       enumerable: false
     },
     hexToAnsi: {

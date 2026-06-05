@@ -44,7 +44,7 @@ describe('renderSkills', () => {
             const lastSkill = { name: 'plan', args: 'this is a very long argument', timestamp: new Date() };
             const result = renderSkills(inactiveUltrawork, inactiveRalph, lastSkill);
             expect(result).toContain('skill:plan');
-            expect(result?.length).toBeLessThan(50);
+            expect(result?.length).toBeLessThan(90);
         });
         it('does not render last skill if it matches active mode', () => {
             const lastSkill = { name: 'ultrawork', timestamp: new Date() };

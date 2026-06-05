@@ -64,9 +64,8 @@ export function renderSkills(
 
   // Last skill (if different from active mode)
   if (lastSkill && !isActiveMode(lastSkill.name, ultrawork, ralph)) {
-    const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
     const displayName = getSkillDisplayName(lastSkill.name);
-    parts.push(`${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`);
+    parts.push(`${APPLE_CYAN}skill:${displayName}${RESET}`);
   }
 
   return parts.length > 0 ? parts.join(' ') : null;
@@ -80,9 +79,8 @@ export function renderLastSkill(
 ): string | null {
   if (!lastSkill) return null;
 
-  const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
   const displayName = getSkillDisplayName(lastSkill.name);
-  return `${APPLE_CYAN}skill:${displayName}${argsDisplay}${RESET}`;
+  return `${APPLE_CYAN}skill:${displayName}${RESET}`;
 }
 
 /**

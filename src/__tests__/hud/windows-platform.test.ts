@@ -120,13 +120,24 @@ describe('Windows HUD Platform Fixes (#739)', () => {
   // =========================================================================
   describe('P1: Call counts Windows ASCII fallback', () => {
     const originalPlatform = process.platform;
+    const originalWslenv = process.env.WSLENV;
 
     afterEach(() => {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
+      if (originalWslenv !== undefined) {
+        process.env.WSLENV = originalWslenv;
+      } else {
+        delete process.env.WSLENV;
+      }
       vi.resetModules();
     });
 
     it('should use emoji icons on macOS/Linux (current platform)', async () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      const origWslenv = process.env.WSLENV;
+      delete process.env.WSLENV;
+      vi.resetModules();
+      vi.doMock('../../platform/index.js', () => ({ isWSL: () => false }));
       const { renderCallCounts } = await import('../../hud/elements/call-counts.js');
       const result = renderCallCounts(42, 7, 3);
       expect(result).toContain('\u{1F527}'); // wrench
@@ -140,7 +151,13 @@ describe('Windows HUD Platform Fixes (#739)', () => {
 
       const mod = await import('../../hud/elements/call-counts.js');
       const result = mod.renderCallCounts(42, 7, 3);
-      expect(result).toBe('T:42 A:7 S:3');
+      // ASCII labels now use APPLE_GRAY color codes
+      expect(result).toContain('T:');
+      expect(result).toContain('42');
+      expect(result).toContain('A:');
+      expect(result).toContain('7');
+      expect(result).toContain('S:');
+      expect(result).toContain('3');
       expect(result).not.toContain('\u{1F527}');
       expect(result).not.toContain('\u{1F916}');
       expect(result).not.toContain('\u26A1');
@@ -161,7 +178,13 @@ describe('Windows HUD Platform Fixes (#739)', () => {
 
       const mod = await import('../../hud/elements/call-counts.js');
       const result = mod.renderCallCounts(42, 7, 3, 'ascii');
-      expect(result).toBe('T:42 A:7 S:3');
+      // ASCII labels now use APPLE_GRAY color codes
+      expect(result).toContain('T:');
+      expect(result).toContain('42');
+      expect(result).toContain('A:');
+      expect(result).toContain('7');
+      expect(result).toContain('S:');
+      expect(result).toContain('3');
     });
 
     it('should return null for zero counts on Windows', async () => {
@@ -177,9 +200,13 @@ describe('Windows HUD Platform Fixes (#739)', () => {
       vi.resetModules();
 
       const mod = await import('../../hud/elements/call-counts.js');
-      expect(mod.renderCallCounts(10, 0, 0)).toBe('T:10');
-      expect(mod.renderCallCounts(0, 5, 0)).toBe('A:5');
-      expect(mod.renderCallCounts(0, 0, 2)).toBe('S:2');
+      // ASCII labels now use APPLE_GRAY color codes
+      expect(mod.renderCallCounts(10, 0, 0)).toContain('T:');
+      expect(mod.renderCallCounts(10, 0, 0)).toContain('10');
+      expect(mod.renderCallCounts(0, 5, 0)).toContain('A:');
+      expect(mod.renderCallCounts(0, 5, 0)).toContain('5');
+      expect(mod.renderCallCounts(0, 0, 2)).toContain('S:');
+      expect(mod.renderCallCounts(0, 0, 2)).toContain('2');
     });
   });
 
