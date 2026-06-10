@@ -15,25 +15,25 @@ describe('renderRateLimitsError', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'network' });
     expect(result).not.toBeNull();
     expect(result).toContain('[API err]');
-    // Verify yellow ANSI color code is present
-    expect(result).toContain('\x1b[33m');
+    // Verify Apple orange ANSI color code is present (true-color)
+    expect(result).toContain('\x1b[38;2;255;159;10m');
   });
 
   it('returns yellow [API auth] for auth errors', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'auth' });
     expect(result).not.toBeNull();
     expect(result).toContain('[API auth]');
-    // Verify yellow ANSI color code is present
-    expect(result).toContain('\x1b[33m');
+    // Verify Apple orange ANSI color code is present (true-color)
+    expect(result).toContain('\x1b[38;2;255;159;10m');
   });
 
   it('returns dimmed [API 429] for rate_limited errors', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'rate_limited' });
     expect(result).not.toBeNull();
     expect(result).toContain('[API 429]');
-    // Verify dim ANSI code is present (not yellow)
+    // Verify dim ANSI code is present (not Apple orange)
     expect(result).toContain('\x1b[2m');
-    expect(result).not.toContain('\x1b[33m');
+    expect(result).not.toContain('\x1b[38;2;255;159;10m');
   });
 
   it('suppresses [API 429] when stale rate limit data is available', () => {

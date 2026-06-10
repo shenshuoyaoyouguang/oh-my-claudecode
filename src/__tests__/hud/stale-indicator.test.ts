@@ -44,8 +44,8 @@ describe('stale indicator: renderRateLimits', () => {
       true,
     );
     expect(result).not.toBeNull();
-    // Green ANSI code should be present
-    expect(result).toContain('\x1b[32m');
+    // Apple green ANSI code should be present (true-color)
+    expect(result).toContain('\x1b[38;2;48;209;88m');
   });
 
   it('applies DIM to stale percentages', () => {

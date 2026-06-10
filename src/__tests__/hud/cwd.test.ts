@@ -54,19 +54,24 @@ describe('renderCwd', () => {
   describe('folder format', () => {
     it('shows parent/leaf to disambiguate common directory names', () => {
       const result = renderCwd('/Users/testuser/workspace/project', 'folder');
-      expect(result).toContain('workspace/project');
+      // path.join uses OS separator (backslash on Windows)
+      expect(result).toContain('workspace');
+      expect(result).toContain('project');
     });
 
     it('handles nested paths', () => {
       const result = renderCwd('/a/b/c/deep/folder', 'folder');
-      expect(result).toContain('deep/folder');
+      expect(result).toContain('deep');
+      expect(result).toContain('folder');
     });
 
     it('disambiguates ambiguous leaf names like src', () => {
       const resultA = renderCwd('/home/user/project-a/src', 'folder');
       const resultB = renderCwd('/home/user/project-b/src', 'folder');
-      expect(resultA).toContain('project-a/src');
-      expect(resultB).toContain('project-b/src');
+      expect(resultA).toContain('project-a');
+      expect(resultA).toContain('src');
+      expect(resultB).toContain('project-b');
+      expect(resultB).toContain('src');
       expect(resultA).not.toEqual(resultB);
     });
 

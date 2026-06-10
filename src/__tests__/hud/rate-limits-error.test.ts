@@ -40,7 +40,7 @@ describe('renderRateLimitsError', () => {
     };
     const result = renderRateLimitsError(usageResult);
     expect(result).toContain('[API err]');
-    expect(result).toContain('\x1b[33m'); // Yellow ANSI code
+    expect(result).toContain('\x1b[38;2;255;159;10m'); // Apple orange (true-color)
   });
 
   it('returns [API err] in yellow when timeout error', () => {
@@ -50,7 +50,7 @@ describe('renderRateLimitsError', () => {
     };
     const result = renderRateLimitsError(usageResult);
     expect(result).toContain('[API err]');
-    expect(result).toContain('\x1b[33m'); // Yellow ANSI code
+    expect(result).toContain('\x1b[38;2;255;159;10m'); // Apple orange (true-color)
   });
 
   it('returns [API err] in yellow when http error', () => {
@@ -60,7 +60,7 @@ describe('renderRateLimitsError', () => {
     };
     const result = renderRateLimitsError(usageResult);
     expect(result).toContain('[API err]');
-    expect(result).toContain('\x1b[33m'); // Yellow ANSI code
+    expect(result).toContain('\x1b[38;2;255;159;10m'); // Apple orange (true-color)
   });
 
   it('includes reset code in output', () => {
@@ -80,7 +80,7 @@ describe('renderRateLimitsError', () => {
     const result = renderRateLimitsError(usageResult);
     expect(result).toContain('[API 429]');
     expect(result).toContain('\x1b[2m'); // Dim ANSI code
-    expect(result).not.toContain('\x1b[33m'); // Not yellow
+    expect(result).not.toContain('\x1b[38;2;255;159;10m'); // Not Apple orange
   });
 
   it('returns null for rate_limited error when stale rate limit data is available', () => {
