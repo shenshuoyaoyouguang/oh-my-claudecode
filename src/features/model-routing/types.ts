@@ -236,20 +236,37 @@ export const AGENT_CATEGORY_TIERS: Record<string, ComplexityTier> = {
  */
 export const COMPLEXITY_KEYWORDS = {
   architecture: [
+    // English
     'architecture', 'refactor', 'redesign', 'restructure', 'reorganize',
     'decouple', 'modularize', 'abstract', 'pattern', 'design',
+    // 中文
+    '架构', '重构', '重新设计', '重组', '重新组织', '解耦', '模块化',
+    '抽象', '模式', '设计模式', '设计',
   ],
   debugging: [
+    // English
     'debug', 'diagnose', 'root cause', 'investigate', 'trace', 'analyze',
     'why is', 'figure out', 'understand why', 'not working',
+    // 中文
+    '调试', '诊断', '根因', '根原因', '排查', '追踪', '分析',
+    '为什么', '搞明白', '弄明白', '不工作', '出问题', '报错',
+    '坏了', '崩溃',
   ],
   simple: [
+    // English
     'find', 'search', 'locate', 'list', 'show', 'where is', 'what is',
     'get', 'fetch', 'display', 'print',
+    // 中文
+    '找', '搜索', '查找', '定位', '列出', '显示', '在哪', '什么是',
+    '获取', '打印', '展示',
   ],
   risk: [
+    // English
     'critical', 'production', 'urgent', 'security', 'breaking', 'dangerous',
     'irreversible', 'data loss', 'migration', 'deploy',
+    // 中文
+    '关键', '生产', '紧急', '安全', '破坏性', '危险', '不可逆',
+    '数据丢失', '迁移', '部署', '上线',
   ],
 };
 

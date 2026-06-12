@@ -2641,4 +2641,260 @@ This article argues that fake popularity signals damage trust in open source.`;
       expect(full!.skill).toBe('autopilot');
     });
   });
+
+  // ============ Chinese Keyword Detection Tests ============
+
+  describe('Chinese keyword detection', () => {
+    it('should detect 自动驾驶 as autopilot', () => {
+      const result = detectKeywordsWithType('请用自动驾驶模式');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should detect 拉尔夫 as ralph', () => {
+      const result = detectKeywordsWithType('让拉尔夫来处理这个问题');
+      expect(result.find((r) => r.type === 'ralph')).toBeDefined();
+    });
+
+    it('should detect 测试先行 as tdd', () => {
+      const result = detectKeywordsWithType('使用测试先行方式开发');
+      expect(result.find((r) => r.type === 'tdd')).toBeDefined();
+    });
+
+    it('should detect 代码审查 as code-review', () => {
+      const result = detectKeywordsWithType('帮我做代码审查');
+      expect(result.find((r) => r.type === 'code-review')).toBeDefined();
+    });
+
+    it('should detect 安全审查 as security-review', () => {
+      const result = detectKeywordsWithType('进行安全审查');
+      expect(result.find((r) => r.type === 'security-review')).toBeDefined();
+    });
+
+    it('should detect 深度思考 as ultrathink', () => {
+      const result = detectKeywordsWithType('用深度思考模式分析');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeDefined();
+    });
+
+    it('should detect 深度搜索 as deepsearch', () => {
+      const result = detectKeywordsWithType('开启深度搜索');
+      expect(result.find((r) => r.type === 'deepsearch')).toBeDefined();
+    });
+
+    it('should detect 深度分析 as analyze', () => {
+      const result = detectKeywordsWithType('做一个深度分析');
+      expect(result.find((r) => r.type === 'analyze')).toBeDefined();
+    });
+
+    it('should detect 深度访谈 as deep-interview', () => {
+      const result = detectKeywordsWithType('开启深度访谈');
+      expect(result.find((r) => r.type === 'deep-interview')).toBeDefined();
+    });
+
+    it('should detect 拉尔计划 as ralplan', () => {
+      const result = detectKeywordsWithType('执行拉尔计划');
+      expect(result.find((r) => r.type === 'ralplan')).toBeDefined();
+    });
+
+    it('should detect 超级工作 as ultrawork', () => {
+      const result = detectKeywordsWithType('启动超级工作模式');
+      expect(result.find((r) => r.type === 'ultrawork')).toBeDefined();
+    });
+
+    it('should detect 取消omc as cancel', () => {
+      const result = detectKeywordsWithType('取消omc');
+      expect(result.find((r) => r.type === 'cancel')).toBeDefined();
+    });
+
+    it('should detect 停止omc as cancel', () => {
+      const result = detectKeywordsWithType('停止omc');
+      expect(result.find((r) => r.type === 'cancel')).toBeDefined();
+    });
+  });
+
+  describe('Chinese informational intent filtering', () => {
+    it('should NOT detect autopilot for informational "什么是自动驾驶模式？"', () => {
+      const result = detectKeywordsWithType('什么是自动驾驶模式？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT detect ralph for informational "拉尔夫是什么？怎么使用？"', () => {
+      const result = detectKeywordsWithType('拉尔夫是什么？怎么使用？');
+      expect(result.find((r) => r.type === 'ralph')).toBeUndefined();
+    });
+
+    it('should NOT detect ultrathink for informational "深度思考模式有什么用？"', () => {
+      const result = detectKeywordsWithType('深度思考模式有什么用？');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('should NOT detect any keyword for mixed info "代码审查和深度分析的区别是什么？"', () => {
+      const result = detectKeywordsWithType('代码审查和深度分析的区别是什么？');
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ============ Chinese Diagnostic Intent Detection Tests ============
+
+  describe('Chinese diagnostic intent detection', () => {
+    it('should NOT trigger autopilot for "自动驾驶一直循环运行"', () => {
+      const result = detectKeywordsWithType('自动驾驶一直循环运行');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger ralph for "拉尔夫老是崩溃报错"', () => {
+      const result = detectKeywordsWithType('拉尔夫老是崩溃报错');
+      expect(result.find((r) => r.type === 'ralph')).toBeUndefined();
+    });
+
+    it('should NOT trigger ultrathink for "深度思考模式不停重跑"', () => {
+      const result = detectKeywordsWithType('深度思考模式不停重跑');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('should NOT trigger ultrawork for "超级工作一直卡住了"', () => {
+      const result = detectKeywordsWithType('超级工作一直卡住了');
+      expect(result.find((r) => r.type === 'ultrawork')).toBeUndefined();
+    });
+  });
+
+  // ============ Chinese Activation Intent Detection Tests ============
+
+  describe('Chinese activation intent detection', () => {
+    it('should detect ralph with Chinese activation "请用拉尔夫处理"', () => {
+      const result = detectKeywordsWithType('请用拉尔夫处理这个问题');
+      expect(result.find((r) => r.type === 'ralph')).toBeDefined();
+    });
+
+    it('should detect autopilot with Chinese activation "帮我启动自动驾驶"', () => {
+      const result = detectKeywordsWithType('帮我启动自动驾驶模式');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+  });
+
+  // ============ Chinese Meta/Banter Context Filtering Tests ============
+
+  describe('Chinese meta/banter context filtering', () => {
+    it('should NOT trigger ralph for "拉尔夫和自动驾驶有什么区别？"', () => {
+      const result = detectKeywordsWithType('拉尔夫和自动驾驶有什么区别？');
+      expect(result.find((r) => r.type === 'ralph')).toBeUndefined();
+    });
+
+    it('should NOT trigger ultrawork for "超级工作模式好用吗？哈哈"', () => {
+      const result = detectKeywordsWithType('超级工作模式好用吗？哈哈');
+      expect(result.find((r) => r.type === 'ultrawork')).toBeUndefined();
+    });
+
+    it('should NOT trigger autopilot for "自动驾驶和全自动哪个好？"', () => {
+      const result = detectKeywordsWithType('自动驾驶和全自动哪个好？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+  });
+
+  // ============ Autopilot Meta/Banter Boundary Tests ============
+
+  describe('autopilot meta/banter boundary — should NOT trigger (meta/banter patterns)', () => {
+    it('should NOT trigger for "自动驾驶和手动模式对比？"', () => {
+      const result = detectKeywordsWithType('自动驾驶和手动模式对比？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "全自动行不行？"', () => {
+      const result = detectKeywordsWithType('全自动行不行？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶靠谱吗？"', () => {
+      const result = detectKeywordsWithType('自动驾驶靠谱吗？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶怎么样？"', () => {
+      const result = detectKeywordsWithType('自动驾驶怎么样？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "全自动和半自动有什么区别？"', () => {
+      const result = detectKeywordsWithType('全自动和半自动有什么区别？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶和全自动差异大吗？"', () => {
+      const result = detectKeywordsWithType('自动驾驶和全自动差异大吗？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶好用吗？"', () => {
+      const result = detectKeywordsWithType('自动驾驶好用吗？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶和普通模式比较？"', () => {
+      const result = detectKeywordsWithType('自动驾驶和普通模式比较？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "全自动和自动驾驶哪个好？"', () => {
+      const result = detectKeywordsWithType('全自动和自动驾驶哪个好？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+
+    it('should NOT trigger for "自动驾驶和人工操作的不同点？"', () => {
+      const result = detectKeywordsWithType('自动驾驶和人工操作的不同点？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeUndefined();
+    });
+  });
+
+  describe('autopilot meta/banter boundary — should trigger (imperative overrides meta)', () => {
+    it('should trigger for "启动自动驾驶" (imperative "启动")', () => {
+      const result = detectKeywordsWithType('启动自动驾驶');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "请用自动驾驶模式" (imperative "请用")', () => {
+      const result = detectKeywordsWithType('请用自动驾驶模式');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "帮我用自动驾驶处理一下" (imperative "帮我用")', () => {
+      const result = detectKeywordsWithType('帮我用自动驾驶处理一下');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "用一下全自动" (imperative "用一下")', () => {
+      const result = detectKeywordsWithType('用一下全自动');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "执行自动驾驶模式" (imperative "执行")', () => {
+      const result = detectKeywordsWithType('执行自动驾驶模式');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "开启全自动" (imperative "开启")', () => {
+      const result = detectKeywordsWithType('开启全自动');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "运行自动驾驶" (imperative "运行")', () => {
+      const result = detectKeywordsWithType('运行自动驾驶');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+  });
+
+  describe('autopilot meta/banter boundary — imperative + question-like (imperative wins)', () => {
+    it('should trigger for "启动自动驾驶好吗？" (imperative precedes question)', () => {
+      const result = detectKeywordsWithType('启动自动驾驶好吗？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "请用自动驾驶，行不行？" (imperative precedes meta)', () => {
+      const result = detectKeywordsWithType('请用自动驾驶，行不行？');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+
+    it('should trigger for "帮我启动自动驾驶，和手动模式比较一下" (imperative precedes comparison)', () => {
+      const result = detectKeywordsWithType('帮我启动自动驾驶，和手动模式比较一下');
+      expect(result.find((r) => r.type === 'autopilot')).toBeDefined();
+    });
+  });
 });

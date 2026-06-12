@@ -121,6 +121,7 @@ export function buildDefaultConfig(): PluginConfig {
         writer: { tier: "LOW", reason: "Documentation is straightforward" },
       },
       escalationKeywords: [
+        // English
         "critical",
         "production",
         "urgent",
@@ -130,8 +131,12 @@ export function buildDefaultConfig(): PluginConfig {
         "refactor",
         "redesign",
         "root cause",
+        // 中文
+        "关键", "生产", "紧急", "安全", "破坏性",
+        "架构", "重构", "重新设计", "根因", "根原因",
       ],
       simplificationKeywords: [
+        // English
         "find",
         "list",
         "show",
@@ -139,6 +144,8 @@ export function buildDefaultConfig(): PluginConfig {
         "search",
         "locate",
         "grep",
+        // 中文
+        "找", "搜索", "查找", "列出", "显示", "在哪", "定位",
       ],
     },
     // External models configuration (Codex, Gemini)

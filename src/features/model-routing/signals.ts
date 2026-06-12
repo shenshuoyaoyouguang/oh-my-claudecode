@@ -123,16 +123,36 @@ function hasKeywords(prompt: string, keywords: string[]): boolean {
  * 'why' questions require deeper reasoning than 'what' or 'where'
  */
 function detectQuestionDepth(prompt: string): 'why' | 'how' | 'what' | 'where' | 'none' {
+  // English patterns
   if (/\bwhy\b.*\?|\bwhy\s+(is|are|does|do|did|would|should|can)/i.test(prompt)) {
     return 'why';
   }
+  // 中文匹配 - 为什么/为何/为啥 → why
+  if (/为什么|为何|为啥|原因是什么|什么原因/.test(prompt)) {
+    return 'why';
+  }
+  // English patterns
   if (/\bhow\b.*\?|\bhow\s+(do|does|can|should|would|to)/i.test(prompt)) {
     return 'how';
   }
+  // 中文匹配 - 怎么/如何/怎样 → how
+  if (/怎么|如何|怎样|怎么样|如何做|怎么做/.test(prompt)) {
+    return 'how';
+  }
+  // English patterns
   if (/\bwhat\b.*\?|\bwhat\s+(is|are|does|do)/i.test(prompt)) {
     return 'what';
   }
+  // 中文匹配 - 什么是/什么/啥 → what
+  if (/什么是|是什么|什么|啥/.test(prompt)) {
+    return 'what';
+  }
+  // English patterns
   if (/\bwhere\b.*\?|\bwhere\s+(is|are|does|do|can)/i.test(prompt)) {
+    return 'where';
+  }
+  // 中文匹配 - 在哪里/在哪/哪儿 → where
+  if (/在哪里|在哪|哪儿/.test(prompt)) {
     return 'where';
   }
   return 'none';
@@ -143,12 +163,20 @@ function detectQuestionDepth(prompt: string): 'why' | 'how' | 'what' | 'where' |
  */
 function detectImplicitRequirements(prompt: string): boolean {
   const vaguePatterns = [
+    // English
     /\bmake it better\b/,
     /\bimprove\b(?!.*(?:by|to|so that))/,
     /\bfix\b(?!.*(?:the|this|that|in|at))/,
     /\boptimize\b(?!.*(?:by|for|to))/,
     /\bclean up\b/,
     /\brefactor\b(?!.*(?:to|by|into))/,
+    // 中文
+    /弄好一点|搞好一点|优化一下|改好一点|弄好看点/,
+    /改进一下|改善一下|提升一下/,
+    /修一下|修修|修好|修一下bug/,
+    /优化(?!.*(?:通过|为了|到))/,
+    /清理一下|整理一下|打扫/,
+    /重构(?!.*(?:到|通过|成))/,
   ];
   return vaguePatterns.some(p => p.test(prompt));
 }
@@ -183,6 +211,7 @@ function detectCrossFileDependencies(prompt: string): boolean {
   if (fileCount >= 2) return true;
 
   const crossFileIndicators = [
+    // English
     /multiple files/i,
     /across.*files/i,
     /several.*files/i,
@@ -190,6 +219,14 @@ function detectCrossFileDependencies(prompt: string): boolean {
     /throughout.*codebase/i,
     /entire.*project/i,
     /whole.*system/i,
+    // 中文
+    /多个文件/,
+    /跨文件/,
+    /所有文件/,
+    /整个项目/,
+    /整个代码库/,
+    /全部文件/,
+    /好几个文件/,
   ];
 
   return crossFileIndicators.some(p => p.test(prompt));
@@ -200,6 +237,7 @@ function detectCrossFileDependencies(prompt: string): boolean {
  */
 function detectTestRequirements(prompt: string): boolean {
   const testIndicators = [
+    // English
     /\btests?\b/i,
     /\bspec\b/i,
     /make sure.*work/i,
@@ -208,6 +246,14 @@ function detectTestRequirements(prompt: string): boolean {
     /\bTDD\b/,
     /unit test/i,
     /integration test/i,
+    // 中文
+    /测试/,
+    /单元测试/,
+    /集成测试/,
+    /确保.*通过/,
+    /验证/,
+    /测试用例/,
+    /用例/,
   ];
   return testIndicators.some(p => p.test(prompt));
 }
@@ -220,20 +266,36 @@ function detectDomain(
 ): 'generic' | 'frontend' | 'backend' | 'infrastructure' | 'security' {
   const domains: Record<string, RegExp[]> = {
     frontend: [
+      // English
       /\b(react|vue|angular|svelte|css|html|jsx|tsx|component|ui|ux|styling|tailwind|sass|scss)\b/i,
       /\b(button|modal|form|input|layout|responsive|animation)\b/i,
+      // 中文
+      /前端/, /界面/, /页面/, /组件/, /样式/, /布局/, /响应式/,
+      /按钮/, /弹窗/, /表单/, /输入框/, /动画/,
     ],
     backend: [
+      // English
       /\b(api|endpoint|database|query|sql|graphql|rest|server|auth|middleware)\b/i,
       /\b(node|express|fastify|nest|django|flask|rails)\b/i,
+      // 中文
+      /后端/, /接口/, /数据库/, /查询/, /服务端/, /中间件/,
+      /认证/, /授权/,
     ],
     infrastructure: [
+      // English
       /\b(docker|kubernetes|k8s|terraform|aws|gcp|azure|ci|cd|deploy|container)\b/i,
       /\b(nginx|load.?balancer|scaling|monitoring|logging)\b/i,
+      // 中文
+      /运维/, /部署/, /容器/, /负载均衡/, /扩容/, /监控/, /日志/,
+      /持续集成/, /持续部署/,
     ],
     security: [
+      // English
       /\b(security|auth|oauth|jwt|encryption|vulnerability|xss|csrf|injection)\b/i,
       /\b(password|credential|secret|token|permission)\b/i,
+      // 中文
+      /安全/, /加密/, /漏洞/, /注入/, /密码/, /凭证/, /令牌/,
+      /权限/, /越权/,
     ],
   };
 
@@ -251,6 +313,7 @@ function detectDomain(
  */
 function detectExternalKnowledge(prompt: string): boolean {
   const externalIndicators = [
+    // English
     /\bdocs?\b/i,
     /\bdocumentation\b/i,
     /\bofficial\b/i,
@@ -259,6 +322,9 @@ function detectExternalKnowledge(prompt: string): boolean {
     /\bframework\b/i,
     /\bhow does.*work\b/i,
     /\bbest practice/i,
+    // 中文
+    /文档/, /官方/, /库/, /框架/, /怎么.*工作/, /最佳实践/,
+    /第三方/, /外部/,
   ];
   return externalIndicators.some(p => p.test(prompt));
 }
@@ -268,6 +334,7 @@ function detectExternalKnowledge(prompt: string): boolean {
  */
 function assessReversibility(prompt: string): 'easy' | 'moderate' | 'difficult' {
   const difficultIndicators = [
+    // English
     /\bmigrat/i,
     /\bproduction\b/i,
     /\bdata.*loss/i,
@@ -275,14 +342,20 @@ function assessReversibility(prompt: string): 'easy' | 'moderate' | 'difficult' 
     /\bdrop.*table/i,
     /\birreversible/i,
     /\bpermanent/i,
+    // 中文
+    /迁移/, /生产环境/, /数据丢失/, /删除所有/, /不可逆/, /永久/,
+    /删库/, /上线/,
   ];
 
   const moderateIndicators = [
+    // English
     /\brefactor/i,
     /\brestructure/i,
     /\brename.*across/i,
     /\bmove.*files/i,
     /\bchange.*schema/i,
+    // 中文
+    /重构/, /重组/, /重命名/, /移动文件/, /修改.*结构/,
   ];
 
   if (difficultIndicators.some(p => p.test(prompt))) return 'difficult';
@@ -295,6 +368,7 @@ function assessReversibility(prompt: string): 'easy' | 'moderate' | 'difficult' 
  */
 function assessImpactScope(prompt: string): 'local' | 'module' | 'system-wide' {
   const systemWideIndicators = [
+    // English
     /\bentire\b/i,
     /\ball\s+(?:files|components|modules)/i,
     /\bwhole\s+(?:project|codebase|system)/i,
@@ -302,15 +376,21 @@ function assessImpactScope(prompt: string): 'local' | 'module' | 'system-wide' {
     /\bglobal/i,
     /\beverywhere/i,
     /\bthroughout/i,
+    // 中文
+    /整个/, /全部/, /所有/, /全局/, /系统级/, /到处/, /贯穿/,
+    /整个项目/, /整个系统/,
   ];
 
   const moduleIndicators = [
+    // English
     /\bmodule/i,
     /\bpackage/i,
     /\bservice/i,
     /\bfeature/i,
     /\bcomponent/i,
     /\blayer/i,
+    // 中文
+    /模块/, /包/, /服务/, /功能/, /组件/, /层/,
   ];
 
   if (systemWideIndicators.some(p => p.test(prompt))) return 'system-wide';

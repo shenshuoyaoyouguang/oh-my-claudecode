@@ -116,6 +116,57 @@ describe('Signal Extraction', () => {
       const signals = extractLexicalSignals('Fix the bug in utils.ts by adding null check');
       expect(signals.hasImplicitRequirements).toBe(false);
     });
+
+    // Chinese language support tests
+    it('should detect Chinese architecture keywords', () => {
+      const signals = extractLexicalSignals('我们需要重构架构设计');
+      expect(signals.hasArchitectureKeywords).toBe(true);
+    });
+
+    it('should detect Chinese debugging keywords', () => {
+      const signals = extractLexicalSignals('调试这个根因问题');
+      expect(signals.hasDebuggingKeywords).toBe(true);
+    });
+
+    it('should detect Chinese simple keywords', () => {
+      const signals = extractLexicalSignals('帮我找一下配置文件');
+      expect(signals.hasSimpleKeywords).toBe(true);
+    });
+
+    it('should detect Chinese risk keywords', () => {
+      const signals = extractLexicalSignals('这是一个关键的生产环境安全漏洞');
+      expect(signals.hasRiskKeywords).toBe(true);
+    });
+
+    it('should detect Chinese question depth — why', () => {
+      const signals = extractLexicalSignals('为什么这个功能不工作了？');
+      expect(signals.questionDepth).toBe('why');
+    });
+
+    it('should detect Chinese question depth — how', () => {
+      const signals = extractLexicalSignals('怎么实现这个功能？');
+      expect(signals.questionDepth).toBe('how');
+    });
+
+    it('should detect Chinese question depth — what', () => {
+      const signals = extractLexicalSignals('这个文件是做什么的？');
+      expect(signals.questionDepth).toBe('what');
+    });
+
+    it('should detect Chinese question depth — where', () => {
+      const signals = extractLexicalSignals('配置文件在哪里？');
+      expect(signals.questionDepth).toBe('where');
+    });
+
+    it('should detect Chinese implicit requirements', () => {
+      const signals = extractLexicalSignals('把这个弄好一点就行');
+      expect(signals.hasImplicitRequirements).toBe(true);
+    });
+
+    it('should handle mixed Chinese-English prompts', () => {
+      const signals = extractLexicalSignals('Refactor这个API的架构设计');
+      expect(signals.hasArchitectureKeywords).toBe(true);
+    });
   });
 
   describe('extractStructuralSignals', () => {
@@ -195,6 +246,57 @@ describe('Signal Extraction', () => {
     it('should detect local impact', () => {
       const signals = extractStructuralSignals('Fix the typo in this function');
       expect(signals.impactScope).toBe('local');
+    });
+
+    // Chinese language support tests
+    it('should detect Chinese cross-file dependencies', () => {
+      const signals = extractStructuralSignals('需要修改多个文件');
+      expect(signals.crossFileDependencies).toBe(true);
+    });
+
+    it('should detect Chinese test requirements', () => {
+      const signals = extractStructuralSignals('写完代码后需要确保测试通过');
+      expect(signals.hasTestRequirements).toBe(true);
+    });
+
+    it('should detect Chinese frontend domain', () => {
+      const signals = extractStructuralSignals('修改前端页面的样式和布局');
+      expect(signals.domainSpecificity).toBe('frontend');
+    });
+
+    it('should detect Chinese backend domain', () => {
+      const signals = extractStructuralSignals('设计后端API接口和数据库查询');
+      expect(signals.domainSpecificity).toBe('backend');
+    });
+
+    it('should detect Chinese infrastructure domain', () => {
+      const signals = extractStructuralSignals('部署Docker容器并设置监控');
+      expect(signals.domainSpecificity).toBe('infrastructure');
+    });
+
+    it('should detect Chinese security domain', () => {
+      const signals = extractStructuralSignals('防止越权攻击并进行安全加密审查');
+      expect(signals.domainSpecificity).toBe('security');
+    });
+
+    it('should detect Chinese system-wide impact', () => {
+      const signals = extractStructuralSignals('这个改动会影响整个系统');
+      expect(signals.impactScope).toBe('system-wide');
+    });
+
+    it('should detect Chinese module-level impact', () => {
+      const signals = extractStructuralSignals('更新认证模块和服务层');
+      expect(signals.impactScope).toBe('module');
+    });
+
+    it('should detect Chinese difficult reversibility', () => {
+      const signals = extractStructuralSignals('执行生产环境数据库迁移');
+      expect(signals.reversibility).toBe('difficult');
+    });
+
+    it('should detect Chinese moderate reversibility', () => {
+      const signals = extractStructuralSignals('重构整个模块结构');
+      expect(signals.reversibility).toBe('moderate');
     });
   });
 
@@ -970,14 +1072,50 @@ describe('Integration Scenarios', () => {
   });
 
   it('should escalate on previous failures', () => {
-    const context: RoutingContext = {
-      taskPrompt: 'Simple task that keeps failing',
-      previousFailures: 3,
-    };
-    const _decision = routeTask(context);
+      const context: RoutingContext = {
+        taskPrompt: 'Simple task that keeps failing',
+        previousFailures: 3,
+      };
+      const _decision = routeTask(context);
 
-    // Previous failures should increase complexity score
-    const signals = extractContextSignals(context);
-    expect(signals.previousFailures).toBe(3);
+      // Previous failures should increase complexity score
+      const signals = extractContextSignals(context);
+      expect(signals.previousFailures).toBe(3);
+    });
+
+    // Chinese language integration scenarios
+    it('should route Chinese simple search to LOW tier', () => {
+      const context: RoutingContext = {
+        taskPrompt: '帮我找一下配置文件在哪里',
+      };
+      const decision = routeTask(context);
+      expect(decision.tier).toBe('LOW');
+      expect(decision.modelType).toBe('haiku');
+    });
+
+    it('should route Chinese architecture task to HIGH tier', () => {
+      const context: RoutingContext = {
+        taskPrompt: '重构整个系统的架构，涉及所有模块的安全性问题',
+      };
+      const decision = routeTask(context);
+      expect(decision.tier).toBe('HIGH');
+      expect(decision.modelType).toBe('opus');
+    });
+
+    it('should route Chinese debugging task to HIGH tier', () => {
+      const context: RoutingContext = {
+        taskPrompt: '生产环境出现严重bug，需要排查根因',
+        agentType: 'architect',
+      };
+      const decision = routeTask(context);
+      expect(decision.tier).toBe('HIGH');
+    });
+
+    it('should handle mixed Chinese-English prompts', () => {
+      const context: RoutingContext = {
+        taskPrompt: 'Refactor the auth module，需要处理所有security相关的vulnerability',
+      };
+      const decision = routeTask(context);
+      expect(decision.tier).toBe('HIGH');
+    });
   });
-});

@@ -42,21 +42,21 @@ export interface DetectedKeyword {
  * Keyword patterns for each mode
  */
 const KEYWORD_PATTERNS: Record<KeywordType, RegExp> = {
-  cancel: /\b(cancelomc|stopomc)\b/i,
-  ralph: /\b(ralph)\b(?!-)|(랄프)(?!로렌)|(ラルフ)(?!・?ローレン)/i,
-  autopilot: /\b(autopilot|auto[\s-]?pilot|fullsend|full\s+auto)\b|(오토파일럿)|(オートパイロット)/i,
-  ultrawork: /\b(ultrawork|ulw)\b|(울트라워크)|(ウルトラワーク)/i,
+  cancel: /\b(cancelomc|stopomc)\b|取消omc|停止omc/i,
+  ralph: /\b(ralph)\b(?!-)|(랄프)(?!로렌)|(ラルフ)(?!・?ローレン)|(拉尔夫)(?!・?劳伦)/i,
+  autopilot: /\b(autopilot|auto[\s-]?pilot|fullsend|full\s+auto)\b|(오토파일럿)|(オートパイロット)|(自动驾驶|全自动)/i,
+  ultrawork: /\b(ultrawork|ulw)\b|(울트라워크)|(ウルトラワーク)|(超级工作)/i,
   // Team keyword detection disabled — team mode is now explicit-only via /team skill.
   // This prevents infinite spawning when Claude workers receive prompts containing "team".
   team: /(?!x)x/,  // never-match placeholder (type system requires the key)
-  ralplan: /\b(ralplan)\b|(랄플랜)|(ラルプラン)/i,
-  tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)|(テスト\s?ファースト)/i,
-  'code-review': /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)|(コード\s?レビュー)(?!ア)/i,
-  'security-review': /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)|(セキュリティ[ー]?\s?レビュー)(?!ア)/i,
-  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)/i,
-  deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)|(ディープ\s?サーチ)/i,
-  analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)|(ディープ\s?アナライズ)/i,
-  'deep-interview': /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)|(ディープインタビュー)/i,
+  ralplan: /\b(ralplan)\b|(랄플랜)|(ラルプラン)|(拉尔计划)/i,
+  tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)|(テスト\s?ファースト)|(测试先行|测试驱动)/i,
+  'code-review': /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)|(コード\s?レビュー)(?!ア)|(代码审查|代码评审|审查代码)/i,
+  'security-review': /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)|(セキュリティ[ー]?\s?レビュー)(?!ア)|(安全审查|安全评审|审查安全)/i,
+  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)|(深度思考)/i,
+  deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)|(ディープ\s?サーチ)|(深度搜索|深入搜索)/i,
+  analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)|(ディープ\s?アナライズ)|(深度分析|深入分析)/i,
+  'deep-interview': /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)|(ディープインタビュー)|(深度访谈)/i,
   ccg: /\b(ccg|claude-codex-gemini)\b|(씨씨지)|(シーシージー)/i,
   codex: /\b(ask|use|delegate\s+to)\s+(codex|gpt)\b/i,
   gemini: /\b(ask|use|delegate\s+to)\s+gemini\b/i
@@ -388,25 +388,38 @@ const INFORMATIONAL_INTENT_PATTERNS: RegExp[] = [
   /\b(?:what(?:'s|\s+is)|what\s+are|how\s+(?:to|do\s+i)\s+use|explain|explanation|tell\s+me\s+about|describe)\b/i,
   /(?:뭐야|뭔데|무엇(?:이야|인가요)?|어떻게|설명(?!서\s*(?:작성|만들|생성|추가|업데이트|수정|편집|쓰))|사용법|알려\s?줘|알려줄래|소개해?\s?줘|소개\s*부탁|설명해\s?줘|뭐가\s*달라|어떤\s*기능|기능\s*(?:알려|설명|뭐)|방법\s*(?:알려|설명|뭐))/u,
   /(?:とは|って何|使い方|説明|(?:について|に関して|違い)[^\n]{0,24}(?:教えて|説明|知りたい)|(?:どう|何が|どこが)違う)/u,
-  /(?:什么是|怎(?:么|樣)用|如何使用|解释|說明|说明)/u,
+  /(?:什么是|是什么|啥是|是啥|怎(?:么|樣)(?:使用|用|办|做)|如何(?:使用|用|做|操作)|解释|說明|说明|有什么用|干嘛用|什么区别|有何区别|区别.*[?？])/u,
 ];
 const INFORMATIONAL_CONTEXT_WINDOW = 80;
 const QUOTED_SPAN_PATTERN =
   /"[^"\n]{1,400}"|'[^'\n]{1,400}'|“[^”\n]{1,400}”|‘[^’\n]{1,400}’/g;
 const REFERENCE_META_PATTERNS: RegExp[] = [
+  // English
   /\b(?:vs\.?|versus|compared\s+to|comparison|compare|article|blog\s+post|documentation|docs?|reference)\b/i,
+  // Korean
   /(?:비교|차이|설명|정리|문서|자료|가이드|이\s*(?:글|비교|문서)는|블로그)/u,
+  // English
   /\b(?:this\s+(?:article|comparison|guide|documentation|doc)|quoted|quote(?:d)?)\b/i,
+  // 中文
+  /(?:对比|比较|区别|差异|文章|博客|文档|资料|指南|参考|这篇.*(?:文章|对比|指南)|vs|对比一下)/u,
 ];
 const REFERENCE_EXPLANATION_PATTERNS: RegExp[] = [
+  // Korean
   /(?:^|\n)\s*(?:결론|특징|예시|요약|장점|단점|설명)\s*[:：]/u,
+  // English
   /\b(?:summary|conclusion|key\s+points?|example|examples|pros|cons|overview)\s*:/i,
-  /[^\n]{1,80}=\s*["“]/,
+  // 中文
+  /(?:^|\n)\s*(?:结论|特点|示例|总结|优点|缺点|说明|概述|简介|摘要)\s*[:：]/u,
+  /[^\n]{1,80}=\s*[""]/,
   /[→⇒]/,
 ];
 const QUESTION_FOLLOWUP_PATTERNS: RegExp[] = [
+  // English
   /\b(?:how\s+many|how\s+much|why|what\s+happened|what\s+went\s+wrong|token\s+budget|cost|pricing)\b/i,
+  // Korean
   /(?:왜|얼마|몇\s*번|몇번|토큰|가격|비용|질문)/u,
+  // 中文
+  /(?:为什么|多少|多少钱|几次|多少[个次]|怎么回事|怎么了|token|令牌|价格|费用|成本|问题|咋回事)/u,
 ];
 const MODE_REFERENCE_PATTERN =
   /\b(?:ralph|autopilot|auto[\s-]?pilot|ultrawork|ulw|ralplan|ultrathink|deepsearch|deep[\s-]?analyze|deepanalyze|deep[\s-]interview|ouroboros|ccg|claude-codex-gemini|deerflow)\b/gi;
@@ -471,6 +484,10 @@ function hasActivationIntentNearKeyword(context: string, keyword: string): boole
   const helpQuestionPatterns = [
     new RegExp(`\\bhow\\s+do\\s+i\\s+use\\b[^\\n]{0,40}\\b${escaped}\\b`, 'i'),
     new RegExp(`\\bwhat(?:'s|\\s+is)\\b[^\\n]{0,40}\\b${escaped}\\b[^\\n]{0,40}\\bhow\\s+to\\s+use\\b`, 'i'),
+    // 中文：帮助类问题
+    new RegExp(`怎么(?:用|使用)[^\\n]{0,30}${escaped}`, 'u'),
+    new RegExp(`如何(?:使用|用)[^\\n]{0,30}${escaped}`, 'u'),
+    new RegExp(`${escaped}[^\\n]{0,20}(?:是什么|怎么用|如何使用)`, 'u'),
   ];
   if (helpQuestionPatterns.some((pattern) => pattern.test(context))) {
     return false;
@@ -479,6 +496,9 @@ function hasActivationIntentNearKeyword(context: string, keyword: string): boole
   const patterns = [
     new RegExp(`\\b(?:use|run|start|enable|activate|invoke|trigger|launch)\\b[^\\n]{0,28}\\b${escaped}\\b`, 'i'),
     new RegExp(`\\b(?:fix|debug|investigate|resolve|handle|patch|address)\\b[^\\n]{0,28}\\b(?:issue|bug|problem|error)\\b[^\\n]{0,12}\\b(?:with|in)\\s+\\b${escaped}\\b`, 'i'),
+    // 中文：执行/激活意图
+    new RegExp(`(?:请用|请使用|帮我用|用一下|启动|开启|执行|运行|激活|调用)[^\\n]{0,20}${escaped}`, 'u'),
+    new RegExp(`(?:修复|调试|排查|调查|处理|解决|搞定)[^\\n]{0,20}(?:问题|bug|错误|故障)[^\\n]{0,12}(?:用|使用|通过)[^\\n]{0,8}${escaped}`, 'u'),
 
   ];
 
@@ -533,6 +553,8 @@ function hasDiagnosticIntentNearKeyword(context: string, keyword: string): boole
     // Japanese: repeated-failure complaint — direct mirror of the Korean 자꾸/계속 line above
     // (frequency adverb + problem verb). No P2 subject-particle pattern / no work-request escape: Korean parity.
     new RegExp(`${escaped}[^\\n]{0,16}(?:また|何度も|ずっと|頻繁|繰り返|いつも)[^\\n]{0,16}(?:失敗|エラー|ループ|止ま|落ち|再実行|動かな|フリーズ|壊れ|クラッシュ|こけ|暴走|無限)`, 'u'),
+    // 中文：重复失败投诉 — 与韩文 자꾸/계속 行和日文 また/何度も 行对等
+    new RegExp(`${escaped}[^\\n]{0,16}(?:一直|老是|总是|不停|反复|频繁|经常)[^\\n]{0,16}(?:循环|重跑|失败|报错|崩溃|卡住|挂了|出错|出问题|跑飞|死循环|无限)`, 'u'),
   ];
 
   return patterns.some((pattern) => pattern.test(context));
@@ -540,13 +562,15 @@ function hasDiagnosticIntentNearKeyword(context: string, keyword: string): boole
 
 function isRalphUltraworkMetaOrBanterContext(context: string, keywordText: string): boolean {
   const normalizedKeyword = keywordText.toLowerCase().replace(/\s+/g, '');
-  if (!['ralph', '랄프', 'ラルフ', 'ultrawork', 'ulw', 'uw', '울트라워크', 'ウルトラワーク'].includes(normalizedKeyword)) {
+  if (!['ralph', '랄프', 'ラルフ', '拉尔夫', 'ultrawork', 'ulw', 'uw', '울트라워크', 'ウルトラワーク', '超级工作', 'autopilot', 'auto-pilot', 'fullsend', 'fullauto', '오토파일럿', 'オートパイロット', '自动驾驶', '全自动'].includes(normalizedKeyword)) {
     return false;
   }
 
-  const currentKeywordAliases = normalizedKeyword === 'ralph' || normalizedKeyword === '랄프' || normalizedKeyword === 'ラルフ'
-    ? ['랄프', 'ラルフ']
-    : ['울트라워크', 'ウルトラワーク'];
+  const currentKeywordAliases = normalizedKeyword === 'ralph' || normalizedKeyword === '랄프' || normalizedKeyword === 'ラルフ' || normalizedKeyword === '拉尔夫'
+    ? ['랄프', 'ラルフ', '拉尔夫']
+    : normalizedKeyword === 'ultrawork' || normalizedKeyword === 'ulw' || normalizedKeyword === 'uw' || normalizedKeyword === '울트라워크' || normalizedKeyword === 'ウルトラワーク' || normalizedKeyword === '超级工作'
+    ? ['울트라워크', 'ウルトラワーク', '超级工作']
+    : ['오토파일럿', 'オートパイロット', '自动驾驶', '全自动'];
   const currentKeywordPattern = currentKeywordAliases.join('|');
   const imperativeVerbPattern = '켜|켜줘|실행|시작|돌려|돌려줘|써|써줘|사용해|진행해';
   const koreanImperativePatterns = [
@@ -557,12 +581,23 @@ function isRalphUltraworkMetaOrBanterContext(context: string, keywordText: strin
     return false;
   }
 
+  // 中文：命令式动词 — 如果用户明确说"请用X"、"启动X"，则不是元问题
+  const chineseImperativePattern = /(?:请用|请使用|帮我用|启动|开启|执行|运行|用一下)/u;
+  if (chineseImperativePattern.test(context)) {
+    return false;
+  }
+
   const metaOrBanterPatterns = [
     /[?？].{0,12}(?:ㅋ{1,}|ㅎ{1,}|lol|lmao)/iu,
     /(?:ㅋ{1,}|ㅎ{1,}|lol|lmao).{0,40}[?？]/iu,
     /(?:ralph|랄프|ultrawork|ulw|uw|울트라워크).{0,40}(?:라도|줘야\s*해|쥐어\s*줘야\s*해|해야\s*해).{0,20}[?？]/iu,
     /(?:관계|관련|연관|차이|비교).{0,40}(?:뭐|무엇|어떻게|설명|알려|궁금|인가|야|냐|니|까|[?？])/u,
     /(?:뭐|무엇|어떻게|설명|알려|궁금).{0,40}(?:관계|관련|연관|차이|비교)/u,
+    // 中文：元问题/闲聊
+    /(?:区别|差异|不同|对比|比较|哪个好|怎么样|好用吗|行不行|靠谱吗).{0,30}(?:[?？])/u,
+    /(?:[?？]).{0,12}(?:哈哈|呵呵|嘻嘻|笑)/u,
+    /(?:哈哈|呵呵|嘻嘻).{0,40}[?？]/u,
+    /(?:关系|关联|区别|差异|对比).{0,30}(?:什么|啥|怎么|如何|吗|呢|啊|吧|[?？])/u,
   ];
 
   return metaOrBanterPatterns.some((pattern) => pattern.test(context));
@@ -573,7 +608,7 @@ function isInformationalKeywordContext(text: string, position: number, keywordLe
   const end = Math.min(text.length, position + keywordLength + INFORMATIONAL_CONTEXT_WINDOW);
   const context = text.slice(start, end);
   const hasInformationalIntent = INFORMATIONAL_INTENT_PATTERNS.some((pattern) => pattern.test(context));
-  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|怎么用|如何使用)/iu.test(context);
+  const hasStrongHelpQueryIntent = /\?|？|\b(?:how\s+(?:to|do\s+i)\s+use|what(?:'s|\s+is)|explain|describe|tell\s+me\s+about)\b|(?:사용법|使い方|什么是|是什么|怎(?:么|樣)(?:使用|用)|如何(?:使用|用)|有什么用|干嘛用)/iu.test(context);
   const lineBounds = getLineBounds(text, position);
   const line = text.slice(lineBounds.start, lineBounds.end);
   const questionOutsideQuotes = stripQuotedSpans(text);
