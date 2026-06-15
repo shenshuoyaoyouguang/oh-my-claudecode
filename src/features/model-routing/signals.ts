@@ -143,8 +143,8 @@ function detectQuestionDepth(prompt: string): 'why' | 'how' | 'what' | 'where' |
   if (/\bwhat\b.*\?|\bwhat\s+(is|are|does|do)/i.test(prompt)) {
     return 'what';
   }
-  // 中文匹配 - 什么是/什么/啥 → what
-  if (/什么是|是什么|什么|啥/.test(prompt)) {
+  // 中文匹配 - 什么是/是什么/啥是/做什么/干什么 → what
+  if (/什么是|是什么|啥是|是啥|做什么|干什么|干嘛|什么意思/.test(prompt)) {
     return 'what';
   }
   // English patterns
@@ -174,7 +174,7 @@ function detectImplicitRequirements(prompt: string): boolean {
     /弄好一点|搞好一点|优化一下|改好一点|弄好看点/,
     /改进一下|改善一下|提升一下/,
     /修一下|修修|修好|修一下bug/,
-    /优化(?!.*(?:通过|为了|到))/,
+    /优化一下|优化优化|稍微优化|帮忙优化/,
     /清理一下|整理一下|打扫/,
     /重构(?!.*(?:到|通过|成))/,
   ];
@@ -251,9 +251,8 @@ function detectTestRequirements(prompt: string): boolean {
     /单元测试/,
     /集成测试/,
     /确保.*通过/,
-    /验证/,
     /测试用例/,
-    /用例/,
+    /写测试|添加测试|补测试|测试验证|验证测试/,
   ];
   return testIndicators.some(p => p.test(prompt));
 }

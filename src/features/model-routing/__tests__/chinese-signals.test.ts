@@ -38,6 +38,16 @@ describe('Chinese Language Signal Extraction', () => {
       expect(signals.questionDepth).toBe('what');
     });
 
+    it('should detect Chinese question depth — what (啥是)', () => {
+      const signals = extractLexicalSignals('啥是微服务架构？');
+      expect(signals.questionDepth).toBe('what');
+    });
+
+    it('should detect Chinese question depth — what (什么意思)', () => {
+      const signals = extractLexicalSignals('这个参数什么意思？');
+      expect(signals.questionDepth).toBe('what');
+    });
+
     it('should detect Chinese question depth — where', () => {
       const signals = extractLexicalSignals('配置文件在哪里？');
       expect(signals.questionDepth).toBe('where');
@@ -73,6 +83,16 @@ describe('Chinese Language Signal Extraction', () => {
     it('should detect Chinese test requirements', () => {
       const signals = extractStructuralSignals('写完代码后需要确保测试通过');
       expect(signals.hasTestRequirements).toBe(true);
+    });
+
+    it('should detect Chinese test requirements — write tests', () => {
+      const signals = extractStructuralSignals('给这个模块写测试');
+      expect(signals.hasTestRequirements).toBe(true);
+    });
+
+    it('should NOT detect test requirements for general validation', () => {
+      const signals = extractStructuralSignals('验证登录功能是否正常');
+      expect(signals.hasTestRequirements).toBe(false);
     });
 
     it('should detect Chinese frontend domain', () => {
