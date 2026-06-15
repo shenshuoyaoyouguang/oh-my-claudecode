@@ -29,7 +29,7 @@ import { DEFAULT_TEAM_GOVERNANCE, DEFAULT_TEAM_TRANSPORT_POLICY, getConfigGovern
 import { inferPhase } from './phase-controller.js';
 import { validateTeamName } from './team-name.js';
 import { buildWorkerArgv, getContract, resolveValidatedBinaryPath, getWorkerEnv as getModelWorkerEnv, isPromptModeAgent, getPromptModeArgs, resolveClaudeWorkerModel, } from './model-contract.js';
-import { createTeamSession, spawnWorkerInPane, sendToWorker, killTeamSession, waitForPaneReady, paneHasActiveTask, paneLooksReady, applyMainVerticalLayout, getWorkerLiveness, captureTeamPane, sendTeamPaneKey, } from './tmux-session.js';
+import { createTeamSession, spawnWorkerInPane, sendToWorker, killTeamSession, waitForPaneReady, paneHasActiveTask, paneLooksReady, applyMainVerticalLayout, getWorkerLiveness, captureTeamPane, sendTeamPaneKey, splitTeamWorkerPane, } from './tmux-session.js';
 import { composeInitialInbox, ensureWorkerStateDir, writeWorkerOverlay, generateTriggerMessage, generatePromptModeStartupPrompt, } from './worker-bootstrap.js';
 import { queueInboxInstruction } from './mcp-comm.js';
 import { cleanupTeamWorktrees, inspectTeamWorktreeCleanupSafety, ensureWorkerWorktree, installWorktreeRootAgents, normalizeTeamWorktreeMode, } from './git-worktree.js';
@@ -317,19 +317,14 @@ async function spawnV2Worker(opts) {
     const splitTarget = opts.existingWorkerPaneIds.length === 0
         ? opts.leaderPaneId
         : opts.existingWorkerPaneIds[opts.existingWorkerPaneIds.length - 1];
-    const splitType = opts.existingWorkerPaneIds.length === 0 ? '-h' : '-v';
-    const splitResult = await tmuxExecAsync([
-        'split-window', splitType, '-t', splitTarget,
-        '-d', '-P', '-F', '#{pane_id}',
-        '-c', opts.workerCwd ?? opts.cwd,
-    ]);
-    const paneId = splitResult.stdout.split('\n')[0]?.trim();
+    const splitDirection = opts.existingWorkerPaneIds.length === 0 ? 'right' : 'down';
+    const paneId = await splitTeamWorkerPane(splitTarget, splitDirection, opts.workerCwd ?? opts.cwd);
     if (!paneId) {
         return { paneId: null, startupAssigned: false, startupFailureReason: 'pane_id_missing' };
     }
     const usePromptMode = isPromptModeAgent(opts.agentType);
     // AC-7: render the CLI-worker output contract when a reviewer-style role
-    // is routed to an external provider (codex/gemini). Claude workers speak
+    // is routed to an external provider (codex/gemini/grok). Claude workers speak
     // through the team messaging API and do not use the verdict-file contract.
     const injectContract = shouldInjectContract(opts.role ?? null, opts.agentType);
     const outputFile = injectContract && opts.role
@@ -360,7 +355,7 @@ async function spawnV2Worker(opts) {
     // For Claude agents on Bedrock/Vertex, resolve the provider-specific model
     // so workers don't fall back to invalid Anthropic API model names. (#1695)
     // Snapshot-provided model (from resolved_routing) takes precedence so
-    // per-role routing (codex/gemini/claude-tier) is honored at spawn time.
+    // per-role routing (codex/gemini/grok/cursor/claude-tier) is honored at spawn time.
     const modelForAgent = opts.model ?? (() => {
         if (opts.agentType === 'codex') {
             return process.env.OMC_EXTERNAL_MODELS_DEFAULT_CODEX_MODEL
@@ -376,6 +371,9 @@ async function spawnV2Worker(opts) {
             return process.env.OMC_EXTERNAL_MODELS_DEFAULT_GROK_MODEL
                 || process.env.OMC_GROK_DEFAULT_MODEL
                 || undefined;
+        }
+        if (opts.agentType === 'cursor') {
+            return undefined;
         }
         // Claude agents: resolve Bedrock/Vertex model when on those providers
         return resolveClaudeWorkerModel();
@@ -600,7 +598,7 @@ export async function startTeamV2(config) {
         }
     }
     // Best-effort resolve extra providers referenced by the routing snapshot
-    // (codex/gemini critic, reviewer, etc.). Missing binaries are tolerated —
+    // (codex/gemini/grok/cursor critic, reviewer, etc.). Missing binaries are tolerated —
     // the spawn path falls back to the snapshot's Claude fallback (AC-8).
     for (const { primary } of Object.values(resolvedRouting)) {
         const provider = primary.provider;

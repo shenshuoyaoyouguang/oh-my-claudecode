@@ -3578,6 +3578,7 @@ function resolveClaudeFamily(modelId) {
   if (lower.includes("sonnet")) return "SONNET";
   if (lower.includes("opus")) return "OPUS";
   if (lower.includes("haiku")) return "HAIKU";
+  if (lower.includes("fable")) return "FABLE";
   return null;
 }
 function hasBedrockModelId(modelIds) {
@@ -3661,7 +3662,7 @@ var init_models = __esm({
     init_ssrf_guard();
     DIRECT_MODEL_ENV_KEYS = ["CLAUDE_MODEL", "ANTHROPIC_MODEL"];
     INHERIT_TIER_PRIORITY = ["MEDIUM", "HIGH", "LOW"];
-    CLAUDE_TIER_ALIASES = /* @__PURE__ */ new Set(["sonnet", "opus", "haiku"]);
+    CLAUDE_TIER_ALIASES = /* @__PURE__ */ new Set(["sonnet", "opus", "haiku", "fable"]);
     TIER_ENV_KEYS = {
       LOW: [
         "OMC_MODEL_LOW",
@@ -3682,7 +3683,8 @@ var init_models = __esm({
     CLAUDE_FAMILY_DEFAULTS = {
       HAIKU: "claude-haiku-4-5",
       SONNET: "claude-sonnet-4-6",
-      OPUS: "claude-opus-4-8"
+      OPUS: "claude-opus-4-8",
+      FABLE: "claude-fable-5"
     };
     BUILTIN_TIER_MODEL_DEFAULTS = {
       LOW: CLAUDE_FAMILY_DEFAULTS.HAIKU,
@@ -3692,7 +3694,8 @@ var init_models = __esm({
     CLAUDE_FAMILY_HIGH_VARIANTS = {
       HAIKU: `${CLAUDE_FAMILY_DEFAULTS.HAIKU}-high`,
       SONNET: `${CLAUDE_FAMILY_DEFAULTS.SONNET}-high`,
-      OPUS: `${CLAUDE_FAMILY_DEFAULTS.OPUS}-high`
+      OPUS: `${CLAUDE_FAMILY_DEFAULTS.OPUS}-high`,
+      FABLE: `${CLAUDE_FAMILY_DEFAULTS.FABLE}-high`
     };
     BUILTIN_EXTERNAL_MODEL_DEFAULTS = {
       codexModel: "gpt-5.3-codex",
@@ -4326,7 +4329,7 @@ var init_loader = __esm({
     DEFAULT_CONFIG = buildDefaultConfig();
     CANONICAL_TEAM_ROLE_SET = new Set(CANONICAL_TEAM_ROLES);
     KNOWN_AGENT_NAME_SET = new Set(KNOWN_AGENT_NAMES);
-    TEAM_ROLE_PROVIDERS = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok"]);
+    TEAM_ROLE_PROVIDERS = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok", "cursor"]);
     TEAM_ROLE_TIERS = /* @__PURE__ */ new Set(["HIGH", "MEDIUM", "LOW"]);
     OMC_STARTUP_COMPACTABLE_SECTIONS = [
       "agent_catalog",
@@ -5647,6 +5650,8 @@ function isValidTranscriptPath(transcriptPath) {
   const allowedPrefixes = [
     getClaudeConfigDir(),
     (0, import_path17.join)(home, ".omc"),
+    (0, import_os4.tmpdir)(),
+    // honors $TMPDIR; covers /tmp and macOS /var/folders defaults
     "/tmp",
     "/var/folders"
     // macOS temp
@@ -15239,15 +15244,7 @@ var init_types4 = __esm({
       modified: "!",
       untracked: "?",
       ahead: "\u21E1",
-      behind: "\u21E3",
-      critical: "CRITICAL",
-      compress: "COMPRESS?",
-      approve: "APPROVE?",
-      working: "working",
-      tokenInput: "i",
-      tokenOutput: "o",
-      tokenReasoning: "r",
-      tokenSession: "s"
+      behind: "\u21E3"
     };
     HUD_LOCALE_LABELS = {
       en: DEFAULT_HUD_LABELS,
@@ -15265,15 +15262,7 @@ var init_types4 = __esm({
         modified: "\u5DF2\u4FEE\u6539",
         untracked: "\u672A\u8DDF\u8E2A",
         ahead: "\u9886\u5148",
-        behind: "\u843D\u540E",
-        critical: "\u5371\u9669",
-        compress: "\u538B\u7F29\u4E00\u4E0B\uFF1F",
-        approve: "\u5141\u8BB8\uFF1F",
-        working: "\u8FDB\u884C\u4E2D",
-        tokenInput: "\u5165",
-        tokenOutput: "\u51FA",
-        tokenReasoning: "\u601D",
-        tokenSession: "\u603B"
+        behind: "\u843D\u540E"
       }
     };
     HUD_LABEL_KEYS = Object.freeze(
@@ -16544,6 +16533,33 @@ function processSubagentStart(input) {
     return { continue: true };
   }
 }
+function findReconcilableRunningAgent(state, agentType) {
+  const candidates = [];
+  for (let i = 0; i < state.agents.length; i++) {
+    const agent = state.agents[i];
+    if (agent.status !== "running") continue;
+    if (agentType && agent.agent_type !== agentType) continue;
+    candidates.push(i);
+  }
+  return candidates.length === 1 ? candidates[0] : -1;
+}
+function reapStaleRunningAgents(state, nowIso) {
+  const now = new Date(nowIso).getTime();
+  let reaped = 0;
+  for (const agent of state.agents) {
+    if (agent.status !== "running") continue;
+    const startTime = new Date(agent.started_at).getTime();
+    if (now - startTime > STALE_THRESHOLD_MS2) {
+      agent.status = "failed";
+      agent.completed_at = nowIso;
+      agent.duration_ms = now - startTime;
+      agent.output_summary = "Marked as stale during unmatched stop reconciliation - exceeded timeout";
+      state.total_failed++;
+      reaped++;
+    }
+  }
+  return reaped;
+}
 function processSubagentStop(input) {
   const sessionId = resolveSessionId({ context: "hook", hookPayload: input });
   const writePath = resolveWritePath(input.cwd, sessionId);
@@ -16552,17 +16568,18 @@ function processSubagentStop(input) {
   try {
     return withFileLockSync(lockPath, () => {
       const state = readTrackingState(input.cwd, sessionId);
-      const agentIndex = state.agents.findIndex(
-        (a) => a.agent_id === input.agent_id
-      );
       const succeeded = input.success !== false;
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      let agentIndex = input.agent_id ? state.agents.findIndex((a) => a.agent_id === input.agent_id) : -1;
+      if (agentIndex === -1 && input.agent_id) {
+        agentIndex = findReconcilableRunningAgent(state, input.agent_type);
+      }
       if (agentIndex !== -1) {
         const agent = state.agents[agentIndex];
         agent.status = succeeded ? "completed" : "failed";
-        agent.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+        agent.completed_at = nowIso;
         const startTime = new Date(agent.started_at).getTime();
-        const endTime = new Date(agent.completed_at).getTime();
-        agent.duration_ms = endTime - startTime;
+        agent.duration_ms = new Date(nowIso).getTime() - startTime;
         if (input.output) {
           agent.output_summary = input.output.substring(0, 500);
         }
@@ -16571,7 +16588,27 @@ function processSubagentStop(input) {
         } else {
           state.total_failed++;
         }
+      } else if (input.agent_id) {
+        reapStaleRunningAgents(state, nowIso);
+        const synthetic = {
+          agent_id: input.agent_id,
+          agent_type: input.agent_type || "unknown",
+          started_at: nowIso,
+          parent_mode: detectParentMode(input.cwd),
+          status: succeeded ? "completed" : "failed",
+          completed_at: nowIso,
+          duration_ms: 0,
+          output_summary: input.output ? input.output.substring(0, 500) : void 0
+        };
+        state.agents.push(synthetic);
+        agentIndex = state.agents.length - 1;
+        if (succeeded) {
+          state.total_completed++;
+        } else {
+          state.total_failed++;
+        }
       }
+      const stoppedAgent = agentIndex !== -1 ? state.agents[agentIndex] : void 0;
       const completedAgents = state.agents.filter(
         (a) => a.status === "completed" || a.status === "failed"
       );
@@ -16587,32 +16624,26 @@ function processSubagentStop(input) {
         state.agents = state.agents.filter((a) => !toRemove.has(a.agent_id));
       }
       writeTrackingState(input.cwd, state, sessionId);
-      try {
-        const trackedAgent = agentIndex !== -1 ? state.agents[agentIndex] : void 0;
-        const agentType = trackedAgent?.agent_type || input.agent_type || "unknown";
-        recordAgentStop(input.cwd, input.session_id, input.agent_id, agentType, succeeded, trackedAgent?.duration_ms);
-      } catch {
+      if (input.agent_id) {
+        try {
+          const agentType = stoppedAgent?.agent_type || input.agent_type || "unknown";
+          recordAgentStop(input.cwd, input.session_id, input.agent_id, agentType, succeeded, stoppedAgent?.duration_ms);
+        } catch {
+        }
+        try {
+          recordMissionAgentStop(input.cwd, {
+            sessionId: input.session_id,
+            agentId: input.agent_id,
+            success: succeeded,
+            outputSummary: stoppedAgent?.output_summary ?? input.output,
+            at: stoppedAgent?.completed_at ?? nowIso
+          }, sessionId);
+        } catch {
+        }
       }
-      try {
-        recordMissionAgentStop(input.cwd, {
-          sessionId: input.session_id,
-          agentId: input.agent_id,
-          success: succeeded,
-          outputSummary: agentIndex !== -1 ? state.agents[agentIndex]?.output_summary : input.output,
-          at: agentIndex !== -1 ? state.agents[agentIndex]?.completed_at : (/* @__PURE__ */ new Date()).toISOString()
-        }, sessionId);
-      } catch {
-      }
-      const runningCount = state.agents.filter(
-        (a) => a.status === "running"
-      ).length;
       return {
         continue: true,
-        hookSpecificOutput: {
-          hookEventName: "SubagentStop",
-          additionalContext: `Agent ${input.agent_type} ${succeeded ? "completed" : "failed"} (${input.agent_id})`,
-          agent_count: runningCount
-        }
+        suppressOutput: true
       };
     }, LOCK_OPTS);
   } catch {
@@ -22832,7 +22863,7 @@ var init_agents_overlay = __esm({
 
 // src/cli/tmux-utils.ts
 function tmuxEnv() {
-  const { TMUX: _, ...env2 } = process.env;
+  const { TMUX: _, PSMUX_SESSION: __, ...env2 } = process.env;
   return env2;
 }
 function resolveEnv(opts) {
@@ -27269,6 +27300,130 @@ var init_template_engine = __esm({
 });
 
 // src/notifications/dispatcher.ts
+function firstEnvValue(names) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return void 0;
+}
+function normalizeNoProxyEntry(entry) {
+  if (!entry.startsWith("http://") && !entry.startsWith("https://")) {
+    return entry;
+  }
+  try {
+    return new URL(entry).host.toLowerCase();
+  } catch {
+    return entry;
+  }
+}
+function shouldBypassProxy(hostname4, port) {
+  const noProxy = firstEnvValue(["NO_PROXY", "no_proxy"]);
+  if (!noProxy) return false;
+  const host = hostname4.toLowerCase();
+  const hostWithPort = `${host}:${port}`;
+  return noProxy.split(",").some((rawEntry) => {
+    const entry = rawEntry.trim().toLowerCase();
+    if (!entry) return false;
+    if (entry === "*") return true;
+    const normalizedEntry = normalizeNoProxyEntry(entry);
+    const entryHost = normalizedEntry.startsWith(".") ? normalizedEntry.slice(1) : normalizedEntry.split(":")[0];
+    return host === normalizedEntry || hostWithPort === normalizedEntry || host === entryHost || host.endsWith(`.${entryHost}`);
+  });
+}
+function getTelegramProxyUrl() {
+  if (shouldBypassProxy(TELEGRAM_API_HOST, TELEGRAM_API_PORT)) return void 0;
+  const proxy = firstEnvValue([
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy"
+  ]);
+  if (!proxy) return void 0;
+  try {
+    return new URL(proxy);
+  } catch {
+    return void 0;
+  }
+}
+function createTelegramProxyConnection(proxyUrl) {
+  return ((_options, callback) => {
+    const proxyHost = proxyUrl.hostname;
+    const proxyPort = Number(
+      proxyUrl.port || (proxyUrl.protocol === "https:" ? 443 : 80)
+    );
+    const connectSocket = proxyUrl.protocol === "https:" ? (0, import_tls.connect)({ host: proxyHost, port: proxyPort, servername: proxyHost }) : (0, import_net.connect)({ host: proxyHost, port: proxyPort });
+    let tlsSocket;
+    let settled = false;
+    const handshakeTimer = setTimeout(() => {
+      fail(new Error("Proxy CONNECT timeout"));
+    }, SEND_TIMEOUT_MS);
+    const fail = (error2) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(handshakeTimer);
+      connectSocket.destroy();
+      tlsSocket?.destroy();
+      callback(error2);
+    };
+    connectSocket.once("error", fail);
+    connectSocket.once(proxyUrl.protocol === "https:" ? "secureConnect" : "connect", () => {
+      const auth = proxyUrl.username || proxyUrl.password ? `Proxy-Authorization: Basic ${Buffer.from(
+        `${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`
+      ).toString("base64")}\r
+` : "";
+      connectSocket.write(
+        `CONNECT ${TELEGRAM_API_HOST}:${TELEGRAM_API_PORT} HTTP/1.1\r
+Host: ${TELEGRAM_API_HOST}:${TELEGRAM_API_PORT}\r
+` + auth + "Connection: close\r\n\r\n"
+      );
+    });
+    let response = Buffer.alloc(0);
+    connectSocket.on("data", (chunk) => {
+      response = Buffer.concat([response, chunk]);
+      const headerEnd = response.indexOf("\r\n\r\n");
+      if (headerEnd === -1) return;
+      const statusLine = response.toString("ascii", 0, headerEnd).split("\r\n")[0] || "";
+      const status = /^HTTP\/\d(?:\.\d)?\s+(\d{3})/.exec(statusLine)?.[1];
+      if (!status || !status.startsWith("2")) {
+        fail(new Error(`Proxy CONNECT failed: ${status || "unknown"}`));
+        return;
+      }
+      connectSocket.removeAllListeners("data");
+      connectSocket.removeListener("error", fail);
+      tlsSocket = (0, import_tls.connect)(
+        { socket: connectSocket, servername: TELEGRAM_API_HOST },
+        () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(handshakeTimer);
+          callback(null, tlsSocket);
+        }
+      );
+      tlsSocket.once("error", fail);
+    });
+    return void 0;
+  });
+}
+function telegramRequestOptions(bodyLength, botToken) {
+  const options = {
+    hostname: TELEGRAM_API_HOST,
+    path: `/bot${botToken}/sendMessage`,
+    method: "POST",
+    family: 4,
+    // Force IPv4 - fetch/undici has IPv6 issues on some systems
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": bodyLength
+    },
+    timeout: SEND_TIMEOUT_MS
+  };
+  const proxyUrl = getTelegramProxyUrl();
+  if (proxyUrl) {
+    options.createConnection = createTelegramProxyConnection(proxyUrl);
+  }
+  return options;
+}
 function composeDiscordContent(message, mention) {
   const mentionParsed = parseMentionAllowedMentions(mention);
   const allowed_mentions = {
@@ -27433,18 +27588,7 @@ async function sendTelegram2(config2, payload) {
     });
     const result = await new Promise((resolve23) => {
       const req = (0, import_https2.request)(
-        {
-          hostname: "api.telegram.org",
-          path: `/bot${config2.botToken}/sendMessage`,
-          method: "POST",
-          family: 4,
-          // Force IPv4 - fetch/undici has IPv6 issues on some systems
-          headers: {
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(body)
-          },
-          timeout: SEND_TIMEOUT_MS
-        },
+        telegramRequestOptions(Buffer.byteLength(body), config2.botToken),
         (res) => {
           const chunks = [];
           res.on("data", (chunk) => chunks.push(chunk));
@@ -27755,11 +27899,13 @@ async function dispatchNotifications(config2, event, payload, platformMessages) 
     if (timer) clearTimeout(timer);
   }
 }
-var import_https2, import_child_process21, import_util8, SEND_TIMEOUT_MS, DISPATCH_TIMEOUT_MS, DISCORD_MAX_CONTENT_LENGTH, execFileAsync4;
+var import_https2, import_net, import_tls, import_child_process21, import_util8, SEND_TIMEOUT_MS, DISPATCH_TIMEOUT_MS, DISCORD_MAX_CONTENT_LENGTH, TELEGRAM_API_HOST, TELEGRAM_API_PORT, execFileAsync4;
 var init_dispatcher2 = __esm({
   "src/notifications/dispatcher.ts"() {
     "use strict";
     import_https2 = require("https");
+    import_net = require("net");
+    import_tls = require("tls");
     init_config();
     import_child_process21 = require("child_process");
     import_util8 = require("util");
@@ -27768,6 +27914,8 @@ var init_dispatcher2 = __esm({
     SEND_TIMEOUT_MS = 1e4;
     DISPATCH_TIMEOUT_MS = 15e3;
     DISCORD_MAX_CONTENT_LENGTH = 2e3;
+    TELEGRAM_API_HOST = "api.telegram.org";
+    TELEGRAM_API_PORT = 443;
     execFileAsync4 = (0, import_util8.promisify)(import_child_process21.execFile);
   }
 });
@@ -29588,7 +29736,8 @@ var init_delegation_enforcer = __esm({
     FAMILY_TO_ALIAS = {
       SONNET: "sonnet",
       OPUS: "opus",
-      HAIKU: "haiku"
+      HAIKU: "haiku",
+      FABLE: "fable"
     };
   }
 });
@@ -29991,6 +30140,7 @@ __export(tmux_session_exports, {
   shouldAttemptAdaptiveRetry: () => shouldAttemptAdaptiveRetry,
   spawnBridgeInSession: () => spawnBridgeInSession,
   spawnWorkerInPane: () => spawnWorkerInPane,
+  splitTeamWorkerPane: () => splitTeamWorkerPane,
   validateTmux: () => validateTmux,
   waitForPaneReady: () => waitForPaneReady
 });
@@ -30386,6 +30536,25 @@ function quoteBridgeShellArg(value) {
 function spawnBridgeInSession(tmuxSession, bridgeScriptPath, configFilePath) {
   const cmd = [process.execPath, bridgeScriptPath, "--config", configFilePath].map(quoteBridgeShellArg).join(" ");
   tmuxExec(["send-keys", "-t", tmuxSession, cmd, "Enter"], { stripTmux: true, stdio: "pipe", timeout: 5e3 });
+}
+async function splitTeamWorkerPane(splitTarget, direction, cwd2) {
+  if (isCmuxContext()) {
+    return cmuxSplitSurface(splitTarget, direction, cwd2);
+  }
+  const splitType = direction === "right" ? "-h" : "-v";
+  const splitResult = await tmuxExecAsync([
+    "split-window",
+    splitType,
+    "-t",
+    splitTarget,
+    "-d",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    "-c",
+    cwd2
+  ]);
+  return splitResult.stdout.split("\n")[0]?.trim() || null;
 }
 async function createTeamSession(teamName, workerCount, cwd2, options = {}) {
   const multiplexerContext = detectTeamMultiplexerContext();
@@ -32383,6 +32552,9 @@ function resolveExternalModel(provider, raw, cfg) {
   if (provider === "grok") {
     return defaults?.grokModel ?? "";
   }
+  if (provider === "cursor") {
+    return "";
+  }
   return defaults?.geminiModel ?? BUILTIN_EXTERNAL_MODEL_DEFAULTS.geminiModel;
 }
 function resolveRoleAssignment(role, cfg) {
@@ -32788,6 +32960,34 @@ function validateBranchName(branch) {
     throw new Error(`Invalid branch name: "${branch}" \u2014 must match ${BRANCH_NAME_RE}`);
   }
 }
+function configureHarnessMergeAttributes(repoRoot) {
+  (0, import_node_child_process7.execFileSync)("git", ["config", "merge.ours.driver", "true"], {
+    cwd: repoRoot,
+    stdio: "pipe"
+  });
+  const commonDir = (0, import_node_child_process7.execFileSync)("git", ["rev-parse", "--git-common-dir"], {
+    cwd: repoRoot,
+    encoding: "utf-8",
+    stdio: "pipe"
+  }).trim();
+  const resolvedCommonDir = (0, import_node_path9.isAbsolute)(commonDir) ? commonDir : (0, import_node_path9.join)(repoRoot, commonDir);
+  const infoDir = (0, import_node_path9.join)(resolvedCommonDir, "info");
+  (0, import_node_fs8.mkdirSync)(infoDir, { recursive: true });
+  const attrPath = (0, import_node_path9.join)(infoDir, "attributes");
+  let existing = "";
+  try {
+    existing = (0, import_node_fs8.readFileSync)(attrPath, "utf-8");
+  } catch {
+  }
+  const existingLines = new Set(existing.split("\n").map((l) => l.trim()));
+  const missing = HARNESS_MERGE_PATHS.map((p) => `${p} merge=ours`).filter(
+    (line) => !existingLines.has(line)
+  );
+  if (missing.length === 0) return;
+  const prefix = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+  (0, import_node_fs8.appendFileSync)(attrPath, `${prefix}${missing.join("\n")}
+`, "utf-8");
+}
 function checkMergeConflicts(workerBranch, baseBranch, repoRoot) {
   validateBranchName(workerBranch);
   validateBranchName(baseBranch);
@@ -32881,13 +33081,16 @@ function mergeWorkerBranch(workerBranch, baseBranch, repoRoot) {
     };
   }
 }
-var import_node_child_process7, BRANCH_NAME_RE;
+var import_node_child_process7, import_node_fs8, import_node_path9, BRANCH_NAME_RE, HARNESS_MERGE_PATHS;
 var init_merge_coordinator = __esm({
   "src/team/merge-coordinator.ts"() {
     "use strict";
     import_node_child_process7 = require("node:child_process");
+    import_node_fs8 = require("node:fs");
+    import_node_path9 = require("node:path");
     init_git_worktree();
     BRANCH_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/;
+    HARNESS_MERGE_PATHS = ["AGENTS.md", ".claude/**"];
   }
 });
 
@@ -33150,10 +33353,10 @@ var init_worker_commit_cadence = __esm({
 
 // src/team/merge-orchestrator.ts
 function mergerWorktreePathFor(repoRoot, teamName) {
-  return (0, import_node_path9.join)(getOmcRoot(repoRoot), "team", sanitizeName(teamName), "merger");
+  return (0, import_node_path10.join)(getOmcRoot(repoRoot), "team", sanitizeName(teamName), "merger");
 }
 function persistedStatePath(repoRoot, teamName) {
-  return (0, import_node_path9.join)(
+  return (0, import_node_path10.join)(
     getOmcRoot(repoRoot),
     "state",
     "team",
@@ -33162,7 +33365,7 @@ function persistedStatePath(repoRoot, teamName) {
   );
 }
 function teardownAuditPath(repoRoot, teamName) {
-  return (0, import_node_path9.join)(
+  return (0, import_node_path10.join)(
     getOmcRoot(repoRoot),
     "state",
     "team",
@@ -33171,7 +33374,7 @@ function teardownAuditPath(repoRoot, teamName) {
   );
 }
 function orchestratorEventLogPath(repoRoot, teamName) {
-  return (0, import_node_path9.join)(
+  return (0, import_node_path10.join)(
     getOmcRoot(repoRoot),
     "state",
     "team",
@@ -33192,7 +33395,7 @@ function assertRuntimeV2Gate() {
 }
 async function appendEvent(repoRoot, teamName, event) {
   const path22 = orchestratorEventLogPath(repoRoot, teamName);
-  await (0, import_promises15.mkdir)((0, import_node_path9.dirname)(path22), { recursive: true });
+  await (0, import_promises15.mkdir)((0, import_node_path10.dirname)(path22), { recursive: true });
   const full = {
     ts: (/* @__PURE__ */ new Date()).toISOString(),
     team: teamName,
@@ -33226,10 +33429,10 @@ function gitPath(worktreePath, gitPathName) {
     if (resolved) return resolved;
   } catch {
   }
-  return (0, import_node_path9.join)(worktreePath, ".git", gitPathName);
+  return (0, import_node_path10.join)(worktreePath, ".git", gitPathName);
 }
 function isRebaseInProgress(worktreePath) {
-  return (0, import_node_fs8.existsSync)(gitPath(worktreePath, "rebase-merge"));
+  return (0, import_node_fs9.existsSync)(gitPath(worktreePath, "rebase-merge"));
 }
 function isWorktreeRegistered(repoRoot, wtPath) {
   try {
@@ -33248,8 +33451,8 @@ function isWorktreeRegistered(repoRoot, wtPath) {
   return false;
 }
 function ensureMergerWorktree(repoRoot, mergerPath, leaderBranch) {
-  ensureDirWithMode((0, import_node_path9.dirname)(mergerPath));
-  if ((0, import_node_fs8.existsSync)(mergerPath) && isWorktreeRegistered(repoRoot, mergerPath)) {
+  ensureDirWithMode((0, import_node_path10.dirname)(mergerPath));
+  if ((0, import_node_fs9.existsSync)(mergerPath) && isWorktreeRegistered(repoRoot, mergerPath)) {
     return;
   }
   (0, import_node_child_process8.execFileSync)("git", ["worktree", "add", "--force", mergerPath, leaderBranch], {
@@ -33288,15 +33491,16 @@ async function startMergeOrchestrator(config2) {
   const pollIntervalMs = config2.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const drainTimeoutMs = config2.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS;
   const mergerPath = mergerWorktreePathFor(config2.repoRoot, config2.teamName);
-  validateResolvedPath(mergerPath, (0, import_node_path9.join)(getOmcRoot(config2.repoRoot), "team"));
+  validateResolvedPath(mergerPath, (0, import_node_path10.join)(getOmcRoot(config2.repoRoot), "team"));
   ensureMergerWorktree(config2.repoRoot, mergerPath, config2.leaderBranch);
   await ensureLeaderInbox(config2.teamName, config2.cwd);
+  configureHarnessMergeAttributes(config2.repoRoot);
   const persistedPath = persistedStatePath(config2.repoRoot, config2.teamName);
   let persisted = { lastShas: {} };
-  if ((0, import_node_fs8.existsSync)(persistedPath)) {
+  if ((0, import_node_fs9.existsSync)(persistedPath)) {
     try {
-      const { readFileSync: readFileSync91 } = await import("node:fs");
-      persisted = JSON.parse(readFileSync91(persistedPath, "utf-8"));
+      const { readFileSync: readFileSync92 } = await import("node:fs");
+      persisted = JSON.parse(readFileSync92(persistedPath, "utf-8"));
     } catch {
       persisted = { lastShas: {} };
     }
@@ -33644,7 +33848,7 @@ ${dirtyFiles.map((f) => `- \`${f}\``).join("\n")}`;
       }
       if (unmerged.length > 0) {
         const auditPath = teardownAuditPath(config2.repoRoot, config2.teamName);
-        await (0, import_promises15.mkdir)((0, import_node_path9.dirname)(auditPath), { recursive: true });
+        await (0, import_promises15.mkdir)((0, import_node_path10.dirname)(auditPath), { recursive: true });
         for (const u of unmerged) {
           const row = JSON.stringify({
             type: "unmerged_at_shutdown",
@@ -33683,10 +33887,10 @@ ${unmerged.map((u) => `- ${u.workerName}: ${u.reason}`).join("\n")}`;
 async function recoverFromRestart(config2) {
   const persistedPath = persistedStatePath(config2.repoRoot, config2.teamName);
   let persistedShasLoaded = 0;
-  if ((0, import_node_fs8.existsSync)(persistedPath)) {
+  if ((0, import_node_fs9.existsSync)(persistedPath)) {
     try {
-      const { readFileSync: readFileSync91 } = await import("node:fs");
-      const persisted = JSON.parse(readFileSync91(persistedPath, "utf-8"));
+      const { readFileSync: readFileSync92 } = await import("node:fs");
+      const persisted = JSON.parse(readFileSync92(persistedPath, "utf-8"));
       persistedShasLoaded = Object.keys(persisted.lastShas ?? {}).length;
     } catch {
       persistedShasLoaded = 0;
@@ -33729,14 +33933,14 @@ Cadence resumes once the git rebase state is gone.`;
   }
   return { orphanedRebases, persistedShasLoaded };
 }
-var import_node_child_process8, import_node_fs8, import_promises15, import_node_path9, DEFAULT_POLL_INTERVAL_MS, DEFAULT_DRAIN_TIMEOUT_MS;
+var import_node_child_process8, import_node_fs9, import_promises15, import_node_path10, DEFAULT_POLL_INTERVAL_MS, DEFAULT_DRAIN_TIMEOUT_MS;
 var init_merge_orchestrator = __esm({
   "src/team/merge-orchestrator.ts"() {
     "use strict";
     import_node_child_process8 = require("node:child_process");
-    import_node_fs8 = require("node:fs");
+    import_node_fs9 = require("node:fs");
     import_promises15 = require("node:fs/promises");
-    import_node_path9 = require("node:path");
+    import_node_path10 = require("node:path");
     init_fs_utils();
     init_worktree_paths();
     init_runtime_flags();
@@ -33973,20 +34177,8 @@ async function waitForWorkerStartupEvidence(teamName, workerName2, taskId, cwd2,
 }
 async function spawnV2Worker(opts) {
   const splitTarget = opts.existingWorkerPaneIds.length === 0 ? opts.leaderPaneId : opts.existingWorkerPaneIds[opts.existingWorkerPaneIds.length - 1];
-  const splitType = opts.existingWorkerPaneIds.length === 0 ? "-h" : "-v";
-  const splitResult = await tmuxExecAsync([
-    "split-window",
-    splitType,
-    "-t",
-    splitTarget,
-    "-d",
-    "-P",
-    "-F",
-    "#{pane_id}",
-    "-c",
-    opts.workerCwd ?? opts.cwd
-  ]);
-  const paneId = splitResult.stdout.split("\n")[0]?.trim();
+  const splitDirection = opts.existingWorkerPaneIds.length === 0 ? "right" : "down";
+  const paneId = await splitTeamWorkerPane(splitTarget, splitDirection, opts.workerCwd ?? opts.cwd);
   if (!paneId) {
     return { paneId: null, startupAssigned: false, startupFailureReason: "pane_id_missing" };
   }
@@ -34035,6 +34227,9 @@ async function spawnV2Worker(opts) {
     }
     if (opts.agentType === "grok") {
       return process.env.OMC_EXTERNAL_MODELS_DEFAULT_GROK_MODEL || process.env.OMC_GROK_DEFAULT_MODEL || void 0;
+    }
+    if (opts.agentType === "cursor") {
+      return void 0;
     }
     return resolveClaudeWorkerModel();
   })();
@@ -34669,10 +34864,10 @@ async function requeueDeadWorkerTasks(teamName, deadWorkerNames, cwd2) {
     await writeFile9(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
     const taskPath2 = absPath(cwd2, TeamPaths.taskFile(sanitized, task.id));
     try {
-      const { readFileSync: readFileSync91, writeFileSync: writeFileSync39 } = await import("fs");
+      const { readFileSync: readFileSync92, writeFileSync: writeFileSync39 } = await import("fs");
       const { withFileLockSync: withFileLockSync2 } = await Promise.resolve().then(() => (init_file_lock(), file_lock_exports));
       withFileLockSync2(taskPath2 + ".lock", () => {
-        const raw = readFileSync91(taskPath2, "utf-8");
+        const raw = readFileSync92(taskPath2, "utf-8");
         const taskData = JSON.parse(raw);
         if (taskData.status === "in_progress") {
           taskData.status = "pending";
@@ -34702,7 +34897,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
     "team.runtime-v2.processCliWorkerVerdicts appendTeamEvent failed"
   );
   const { rename: rename3 } = await import("fs/promises");
-  const { readFileSync: readFileSync91, writeFileSync: writeFileSync39, existsSync: fsExistsSync } = await import("fs");
+  const { readFileSync: readFileSync92, writeFileSync: writeFileSync39, existsSync: fsExistsSync } = await import("fs");
   const { withFileLockSync: withFileLockSync2 } = await Promise.resolve().then(() => (init_file_lock(), file_lock_exports));
   for (const worker of config2.workers) {
     const outputFile = worker.output_file;
@@ -34736,7 +34931,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
       const taskPath2 = absPath(cwd2, TeamPaths.taskFile(sanitized, taskId));
       if (!fsExistsSync(taskPath2)) continue;
       try {
-        const taskRaw = readFileSync91(taskPath2, "utf-8");
+        const taskRaw = readFileSync92(taskPath2, "utf-8");
         const taskData = JSON.parse(taskRaw);
         if (taskData.owner === worker.name && taskData.status === "in_progress") {
           targetTaskId = taskId;
@@ -34764,7 +34959,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
     let transitionOk = false;
     try {
       withFileLockSync2(targetTaskPath + ".lock", () => {
-        const raw = readFileSync91(targetTaskPath, "utf-8");
+        const raw = readFileSync92(targetTaskPath, "utf-8");
         const taskData = JSON.parse(raw);
         if (taskData.status !== "in_progress" || taskData.owner !== worker.name) {
           return;
@@ -35896,20 +36091,8 @@ async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
   const marked = await markTaskInProgress(root2, taskId, workerNameValue, runtime.teamName, runtime.cwd);
   if (!marked) return "";
   const splitTarget = runtime.workerPaneIds.length === 0 ? runtime.leaderPaneId : runtime.workerPaneIds[runtime.workerPaneIds.length - 1];
-  const splitType = runtime.workerPaneIds.length === 0 ? "-h" : "-v";
-  const splitResult = await tmuxExecAsync([
-    "split-window",
-    splitType,
-    "-t",
-    splitTarget,
-    "-d",
-    "-P",
-    "-F",
-    "#{pane_id}",
-    "-c",
-    runtime.cwd
-  ]);
-  const paneId = splitResult.stdout.split("\n")[0]?.trim();
+  const splitDirection = runtime.workerPaneIds.length === 0 ? "right" : "down";
+  const paneId = await splitTeamWorkerPane(splitTarget, splitDirection, runtime.cwd);
   if (!paneId) {
     try {
       await resetTaskToPending(root2, taskId, runtime.teamName, runtime.cwd);
@@ -35937,6 +36120,9 @@ async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
     }
     if (agentType === "grok") {
       return process.env.OMC_EXTERNAL_MODELS_DEFAULT_GROK_MODEL || process.env.OMC_GROK_DEFAULT_MODEL || void 0;
+    }
+    if (agentType === "cursor") {
+      return void 0;
     }
     return resolveClaudeWorkerModel();
   })();
@@ -36064,7 +36250,7 @@ async function shutdownTeam(teamName, sessionName2, cwd2, timeoutMs = 3e4, worke
     teamName
   });
   const configData = await readJsonSafe5((0, import_path93.join)(root2, "config.json"));
-  const CLI_AGENT_TYPES = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok"]);
+  const CLI_AGENT_TYPES = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok", "cursor"]);
   const agentTypes = configData?.agentTypes ?? [];
   const isCliWorkerTeam = agentTypes.length > 0 && agentTypes.every((t) => CLI_AGENT_TYPES.has(t));
   if (!isCliWorkerTeam) {
@@ -43858,6 +44044,7 @@ function readKeychainCredential(serviceName, account) {
       expiresAt: creds.expiresAt,
       refreshToken: creds.refreshToken,
       source: "keychain",
+      keychainAccount: account ?? null,
       subscriptionType: creds.subscriptionType,
       rateLimitTier: creds.rateLimitTier
     };
@@ -44093,7 +44280,50 @@ function fetchUsageFromZai() {
     }
   });
 }
+function writeKeychainCredentials(creds) {
+  if (process.platform !== "darwin") return;
+  try {
+    const serviceName = getKeychainServiceName();
+    const account = creds.keychainAccount ?? void 0;
+    const readArgs = account ? ["find-generic-password", "-s", serviceName, "-a", account, "-w"] : ["find-generic-password", "-s", serviceName, "-w"];
+    let existing = {};
+    try {
+      const raw = (0, import_child_process30.execFileSync)("/usr/bin/security", readArgs, {
+        encoding: "utf-8",
+        timeout: 2e3,
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim();
+      if (raw) existing = JSON.parse(raw);
+    } catch {
+    }
+    if (existing.claudeAiOauth && typeof existing.claudeAiOauth === "object") {
+      const inner = existing.claudeAiOauth;
+      inner.accessToken = creds.accessToken;
+      if (creds.expiresAt != null) inner.expiresAt = creds.expiresAt;
+      if (creds.refreshToken) inner.refreshToken = creds.refreshToken;
+    } else {
+      existing.accessToken = creds.accessToken;
+      if (creds.expiresAt != null) existing.expiresAt = creds.expiresAt;
+      if (creds.refreshToken) existing.refreshToken = creds.refreshToken;
+    }
+    const newJson = JSON.stringify(existing);
+    const writeArgs = account ? ["add-generic-password", "-s", serviceName, "-a", account, "-w", newJson, "-U"] : ["add-generic-password", "-s", serviceName, "-w", newJson, "-U"];
+    (0, import_child_process30.execFileSync)("/usr/bin/security", writeArgs, {
+      encoding: "utf-8",
+      timeout: 2e3,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+  } catch {
+    if (process.env.OMC_DEBUG) {
+      console.error("[usage-api] Failed to write back refreshed credentials to Keychain");
+    }
+  }
+}
 function writeBackCredentials(creds) {
+  if (creds.source === "keychain") {
+    writeKeychainCredentials(creds);
+    return;
+  }
   try {
     const credPath = (0, import_path115.join)(getClaudeConfigDir(), ".credentials.json");
     if (!(0, import_fs96.existsSync)(credPath)) return;
@@ -44509,19 +44739,7 @@ var init_usage_api = __esm({
 });
 
 // src/cli/utils/formatting.ts
-function formatTokenCount(tokens, locale) {
-  if (locale === "zh-CN") {
-    if (tokens < 1e3) return `${tokens}`;
-    if (tokens < 1e4) {
-      const val = tokens / 1e3;
-      return `${val < 10 ? val.toFixed(1) : Math.round(val)}\u5343`;
-    }
-    if (tokens < 1e8) {
-      const val = tokens / 1e4;
-      return `${val < 100 ? val.toFixed(1) : Math.round(val)}\u4E07`;
-    }
-    return `${(tokens / 1e8).toFixed(1)}\u4EBF`;
-  }
+function formatTokenCount(tokens) {
   if (tokens < 1e3) return `${tokens}`;
   if (tokens < 1e6) return `${(tokens / 1e3).toFixed(1)}k`;
   return `${(tokens / 1e6).toFixed(2)}M`;
@@ -45573,20 +45791,14 @@ var init_custom_rate_provider = __esm({
 });
 
 // src/hud/colors.ts
-function appleGreen(text) {
-  return `${APPLE_GREEN}${text}${RESET}`;
-}
-function appleOrange(text) {
-  return `${APPLE_ORANGE}${text}${RESET}`;
-}
-function appleRed(text) {
-  return `${APPLE_RED}${text}${RESET}`;
-}
 function green(text) {
   return `${GREEN}${text}${RESET}`;
 }
 function yellow(text) {
   return `${YELLOW}${text}${RESET}`;
+}
+function red(text) {
+  return `${RED}${text}${RESET}`;
 }
 function cyan(text) {
   return `${CYAN}${text}${RESET}`;
@@ -45611,7 +45823,7 @@ function getDurationColor(durationMs) {
   if (minutes >= 2) return YELLOW;
   return GREEN;
 }
-var RESET, DIM, BOLD, RED, GREEN, YELLOW, MAGENTA, CYAN, APPLE_GREEN, APPLE_YELLOW, APPLE_ORANGE, APPLE_RED, APPLE_BLUE, APPLE_PURPLE, APPLE_CYAN, APPLE_GRAY;
+var RESET, DIM, BOLD, RED, GREEN, YELLOW, MAGENTA, CYAN;
 var init_colors = __esm({
   "src/hud/colors.ts"() {
     "use strict";
@@ -45623,14 +45835,6 @@ var init_colors = __esm({
     YELLOW = "\x1B[33m";
     MAGENTA = "\x1B[35m";
     CYAN = "\x1B[36m";
-    APPLE_GREEN = "\x1B[38;2;48;209;88m";
-    APPLE_YELLOW = "\x1B[38;2;255;214;10m";
-    APPLE_ORANGE = "\x1B[38;2;255;159;10m";
-    APPLE_RED = "\x1B[38;2;255;69;58m";
-    APPLE_BLUE = "\x1B[38;2;10;132;255m";
-    APPLE_PURPLE = "\x1B[38;2;191;90;242m";
-    APPLE_CYAN = "\x1B[38;2;100;210;255m";
-    APPLE_GRAY = "\x1B[38;2;152;152;157m";
   }
 });
 
@@ -45644,19 +45848,23 @@ function renderRalph(state, thresholds, labels = DEFAULT_HUD_LABELS) {
   const criticalThreshold = Math.floor(maxIterations * 0.9);
   let color;
   if (iteration >= criticalThreshold) {
-    color = APPLE_RED;
+    color = RED2;
   } else if (iteration >= warningThreshold) {
-    color = APPLE_ORANGE;
+    color = YELLOW2;
   } else {
-    color = APPLE_GREEN;
+    color = GREEN2;
   }
   return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;
 }
+var RED2, YELLOW2, GREEN2;
 var init_ralph2 = __esm({
   "src/hud/elements/ralph.ts"() {
     "use strict";
     init_types4();
     init_colors();
+    RED2 = "\x1B[31m";
+    YELLOW2 = "\x1B[33m";
+    GREEN2 = "\x1B[32m";
   }
 });
 
@@ -46039,7 +46247,7 @@ var init_agents = __esm({
 });
 
 // src/hud/elements/todos.ts
-function renderTodosWithCurrent(todos, labels = DEFAULT_HUD_LABELS) {
+function renderTodosWithCurrent(todos) {
   if (todos.length === 0) {
     return null;
   }
@@ -46049,32 +46257,37 @@ function renderTodosWithCurrent(todos, labels = DEFAULT_HUD_LABELS) {
   const percent = completed / total * 100;
   let color;
   if (percent >= 80) {
-    color = APPLE_GREEN;
+    color = GREEN3;
   } else if (percent >= 50) {
-    color = APPLE_ORANGE;
+    color = YELLOW3;
   } else {
-    color = APPLE_CYAN;
+    color = CYAN3;
   }
   let result = `todos:${color}${completed}/${total}${RESET}`;
   if (inProgress) {
     const activeText = inProgress.activeForm || inProgress.content || "...";
     const truncated = truncateToWidth(activeText, 30);
-    result += ` ${DIM2}(${labels.working}: ${truncated})${RESET}`;
+    result += ` ${DIM2}(working: ${truncated})${RESET}`;
   }
   return result;
 }
-var DIM2;
+var GREEN3, YELLOW3, CYAN3, DIM2;
 var init_todos = __esm({
   "src/hud/elements/todos.ts"() {
     "use strict";
-    init_types4();
     init_colors();
     init_string_width();
+    GREEN3 = "\x1B[32m";
+    YELLOW3 = "\x1B[33m";
+    CYAN3 = "\x1B[36m";
     DIM2 = "\x1B[2m";
   }
 });
 
 // src/hud/elements/skills.ts
+function truncate(str, maxWidth) {
+  return truncateToWidth(str, maxWidth);
+}
 function getSkillDisplayName(skillName) {
   return skillName.split(":").pop() || skillName;
 }
@@ -46087,28 +46300,33 @@ function isActiveMode(skillName, ultrawork, ralph) {
 function renderSkills(ultrawork, ralph, lastSkill) {
   const parts = [];
   if (ralph?.active && ultrawork?.active) {
-    parts.push(`${APPLE_PURPLE}ultrawork+ralph${RESET}`);
+    parts.push(`${BRIGHT_MAGENTA}ultrawork+ralph${RESET}`);
   } else if (ultrawork?.active) {
-    parts.push(`${APPLE_PURPLE}ultrawork${RESET}`);
+    parts.push(`${MAGENTA2}ultrawork${RESET}`);
   } else if (ralph?.active) {
-    parts.push(`${APPLE_PURPLE}ralph${RESET}`);
+    parts.push(`${MAGENTA2}ralph${RESET}`);
   }
   if (lastSkill && !isActiveMode(lastSkill.name, ultrawork, ralph)) {
+    const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : "";
     const displayName = getSkillDisplayName(lastSkill.name);
-    parts.push(`${APPLE_CYAN}skill:${displayName}${RESET}`);
+    parts.push(cyan(`skill:${displayName}${argsDisplay}`));
   }
   return parts.length > 0 ? parts.join(" ") : null;
 }
 function renderLastSkill(lastSkill) {
   if (!lastSkill) return null;
+  const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : "";
   const displayName = getSkillDisplayName(lastSkill.name);
-  return `${APPLE_CYAN}skill:${displayName}${RESET}`;
+  return cyan(`skill:${displayName}${argsDisplay}`);
 }
+var MAGENTA2, BRIGHT_MAGENTA;
 var init_skills = __esm({
   "src/hud/elements/skills.ts"() {
     "use strict";
     init_colors();
     init_string_width();
+    MAGENTA2 = "\x1B[35m";
+    BRIGHT_MAGENTA = "\x1B[95m";
   }
 });
 
@@ -46128,17 +46346,17 @@ function getContextSeverity(safePercent, thresholds) {
   }
   return "normal";
 }
-function getContextDisplayStyle(safePercent, thresholds, labels = DEFAULT_HUD_LABELS) {
+function getContextDisplayStyle(safePercent, thresholds) {
   const severity = getContextSeverity(safePercent, thresholds);
   switch (severity) {
     case "critical":
-      return { color: APPLE_RED, suffix: ` ${labels.critical}` };
+      return { color: RED3, suffix: " CRITICAL" };
     case "compact":
-      return { color: APPLE_ORANGE, suffix: ` ${labels.compress}` };
+      return { color: YELLOW4, suffix: " COMPRESS?" };
     case "warning":
-      return { color: APPLE_ORANGE, suffix: "" };
+      return { color: YELLOW4, suffix: "" };
     default:
-      return { color: APPLE_GREEN, suffix: "" };
+      return { color: GREEN4, suffix: "" };
   }
 }
 function getStableContextDisplayPercent(percent, thresholds, displayScope) {
@@ -46174,23 +46392,26 @@ function getStableContextDisplayPercent(percent, thresholds, displayScope) {
 }
 function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
   return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
 }
 function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const filled = Math.round(safePercent / 100 * barWidth);
   const empty = barWidth - filled;
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
   const bar = `${color}${"\u2588".repeat(filled)}${DIM3}${"\u2591".repeat(empty)}${RESET}`;
   return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
-var DIM3, CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
+var GREEN4, YELLOW4, RED3, DIM3, CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
 var init_context = __esm({
   "src/hud/elements/context.ts"() {
     "use strict";
     init_types4();
     init_colors();
+    GREEN4 = "\x1B[32m";
+    YELLOW4 = "\x1B[33m";
+    RED3 = "\x1B[31m";
     DIM3 = "\x1B[2m";
     CONTEXT_DISPLAY_HYSTERESIS = 2;
     CONTEXT_DISPLAY_STATE_TTL_MS = 5e3;
@@ -46209,22 +46430,24 @@ function renderBackground(tasks, labels = DEFAULT_HUD_LABELS) {
   }
   let color;
   if (running >= MAX_CONCURRENT) {
-    color = APPLE_ORANGE;
+    color = YELLOW5;
   } else if (running >= MAX_CONCURRENT - 1) {
-    color = APPLE_CYAN;
+    color = CYAN4;
   } else {
-    color = APPLE_GREEN;
+    color = GREEN5;
   }
   return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
 }
-var MAX_CONCURRENT;
+var CYAN4, GREEN5, YELLOW5, MAX_CONCURRENT;
 var init_background = __esm({
   "src/hud/elements/background.ts"() {
     "use strict";
     init_types4();
     init_colors();
     init_string_width();
-    init_colors();
+    CYAN4 = "\x1B[36m";
+    GREEN5 = "\x1B[32m";
+    YELLOW5 = "\x1B[33m";
     MAX_CONCURRENT = 5;
   }
 });
@@ -46236,31 +46459,31 @@ function renderPrd(state) {
   }
   const { currentStoryId, completed, total } = state;
   if (completed === total) {
-    return `${GREEN2}PRD:done${RESET}`;
+    return `${GREEN6}PRD:done${RESET}`;
   }
   if (currentStoryId) {
-    return `${CYAN3}${currentStoryId}${RESET}`;
+    return `${CYAN5}${currentStoryId}${RESET}`;
   }
   return null;
 }
-var CYAN3, GREEN2;
+var CYAN5, GREEN6;
 var init_prd2 = __esm({
   "src/hud/elements/prd.ts"() {
     "use strict";
     init_colors();
-    CYAN3 = "\x1B[36m";
-    GREEN2 = "\x1B[32m";
+    CYAN5 = "\x1B[36m";
+    GREEN6 = "\x1B[32m";
   }
 });
 
 // src/hud/elements/limits.ts
 function getColor(percent) {
   if (percent >= CRITICAL_THRESHOLD2) {
-    return APPLE_RED;
+    return RED4;
   } else if (percent >= WARNING_THRESHOLD) {
-    return APPLE_ORANGE;
+    return YELLOW6;
   }
-  return APPLE_GREEN;
+  return GREEN7;
 }
 function formatResetTime(date3) {
   if (!date3) return null;
@@ -46396,8 +46619,8 @@ function renderRateLimitsError(result) {
   if (result.error === "rate_limited") {
     return result.rateLimits ? null : `${DIM4}[API 429]${RESET}`;
   }
-  if (result.error === "auth") return `${APPLE_ORANGE}[API auth]${RESET}`;
-  return `${APPLE_ORANGE}[API err]${RESET}`;
+  if (result.error === "auth") return `${YELLOW6}[API auth]${RESET}`;
+  return `${YELLOW6}[API err]${RESET}`;
 }
 function bucketUsagePercent(usage) {
   if (usage.type === "percent") return usage.value;
@@ -46411,7 +46634,7 @@ function renderBucketUsageValue(usage) {
 }
 function renderCustomBuckets(result, thresholdPercent = 85) {
   if (result.error && result.buckets.length === 0) {
-    return `${APPLE_ORANGE}[cmd:err]${RESET}`;
+    return `${YELLOW6}[cmd:err]${RESET}`;
   }
   if (result.buckets.length === 0) return null;
   const staleMarker = result.stale ? `${DIM4}*${RESET}` : "";
@@ -46432,11 +46655,14 @@ function renderCustomBuckets(result, thresholdPercent = 85) {
   });
   return parts.join(" ");
 }
-var DIM4, WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
+var GREEN7, YELLOW6, RED4, DIM4, WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
 var init_limits = __esm({
   "src/hud/elements/limits.ts"() {
     "use strict";
     init_colors();
+    GREEN7 = "\x1B[32m";
+    YELLOW6 = "\x1B[33m";
+    RED4 = "\x1B[31m";
     DIM4 = "\x1B[2m";
     WARNING_THRESHOLD = 70;
     CRITICAL_THRESHOLD2 = 90;
@@ -46444,14 +46670,13 @@ var init_limits = __esm({
 });
 
 // src/hud/elements/permission.ts
-function renderPermission(pending, labels = DEFAULT_HUD_LABELS) {
+function renderPermission(pending) {
   if (!pending) return null;
-  return `${appleOrange(labels.approve)} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
+  return `${yellow("APPROVE?")} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
 }
 var init_permission = __esm({
   "src/hud/elements/permission.ts"() {
     "use strict";
-    init_types4();
     init_colors();
   }
 });
@@ -46467,23 +46692,25 @@ function renderThinking(state, format = "text", labels = DEFAULT_HUD_LABELS) {
     case "face":
       return "\u{1F914}";
     case "text":
-      return `${APPLE_CYAN}${labels.thinking}${RESET}`;
+      return `${CYAN6}${labels.thinking}${RESET}`;
     default:
       return "\u{1F4AD}";
   }
 }
+var CYAN6;
 var init_thinking = __esm({
   "src/hud/elements/thinking.ts"() {
     "use strict";
     init_types4();
     init_colors();
+    CYAN6 = "\x1B[36m";
   }
 });
 
 // src/hud/elements/session.ts
 function renderSession(session) {
   if (!session) return null;
-  const colorize = session.health === "critical" ? appleRed : session.health === "warning" ? appleOrange : appleGreen;
+  const colorize = session.health === "critical" ? red : session.health === "warning" ? yellow : green;
   return `session:${colorize(`${session.durationMinutes}m`)}`;
 }
 var init_session = __esm({
@@ -46494,21 +46721,18 @@ var init_session = __esm({
 });
 
 // src/hud/elements/token-usage.ts
-function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS, locale, tokenFormat = "detailed") {
+function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS) {
   if (!usage) return null;
   const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
   if (!hasUsage) return null;
-  if (tokenFormat === "total" && sessionTotalTokens && sessionTotalTokens > 0) {
-    return `\u03A3${formatTokenCount(sessionTotalTokens, locale)}`;
-  }
   const parts = [
-    `\u2193${formatTokenCount(usage.inputTokens, locale)} \u2191${formatTokenCount(usage.outputTokens, locale)}`
+    `${labels.tokens}:i${formatTokenCount(usage.inputTokens)}/o${formatTokenCount(usage.outputTokens)}`
   ];
   if (usage.reasoningTokens && usage.reasoningTokens > 0) {
-    parts.push(`\u2248${formatTokenCount(usage.reasoningTokens, locale)}`);
+    parts.push(`r${formatTokenCount(usage.reasoningTokens)}`);
   }
   if (sessionTotalTokens && sessionTotalTokens > 0) {
-    parts.push(`\u03A3${formatTokenCount(sessionTotalTokens, locale)}`);
+    parts.push(`s${formatTokenCount(sessionTotalTokens)}`);
   }
   return parts.join(" ");
 }
@@ -46522,9 +46746,9 @@ var init_token_usage = __esm({
 
 // src/hud/elements/enterprise-cost.ts
 function getColor2(percent) {
-  if (percent >= CRITICAL_THRESHOLD3) return APPLE_RED;
-  if (percent >= WARNING_THRESHOLD2) return APPLE_ORANGE;
-  return APPLE_GREEN;
+  if (percent >= CRITICAL_THRESHOLD3) return RED5;
+  if (percent >= WARNING_THRESHOLD2) return YELLOW7;
+  return GREEN8;
 }
 function formatMoney(amount) {
   const [intPart, decPart] = amount.toFixed(2).split(".");
@@ -46549,11 +46773,14 @@ function renderEnterpriseCost(limits, stale) {
   const color = getColor2(rounded);
   return `${DIM5}spent:${RESET}${prefix}${spentStr}/${prefix}${limitStr} ${color}(${rounded}%)${RESET}${staleMarker}`;
 }
-var DIM5, WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
+var GREEN8, YELLOW7, RED5, DIM5, WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
 var init_enterprise_cost = __esm({
   "src/hud/elements/enterprise-cost.ts"() {
     "use strict";
     init_colors();
+    GREEN8 = "\x1B[32m";
+    YELLOW7 = "\x1B[33m";
+    RED5 = "\x1B[31m";
     DIM5 = "\x1B[2m";
     WARNING_THRESHOLD2 = 70;
     CRITICAL_THRESHOLD3 = 90;
@@ -46600,26 +46827,26 @@ function renderAutopilot(state, _thresholds) {
   let phaseColor;
   switch (phase) {
     case "complete":
-      phaseColor = APPLE_GREEN;
+      phaseColor = GREEN9;
       break;
     case "failed":
-      phaseColor = APPLE_RED;
+      phaseColor = RED6;
       break;
     case "validation":
-      phaseColor = APPLE_PURPLE;
+      phaseColor = MAGENTA3;
       break;
     case "qa":
-      phaseColor = APPLE_ORANGE;
+      phaseColor = YELLOW8;
       break;
     default:
-      phaseColor = APPLE_BLUE;
+      phaseColor = CYAN7;
   }
-  let output = `${APPLE_CYAN}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
+  let output = `${CYAN7}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
   if (iteration > 1) {
     output += ` (iter ${iteration}/${maxIterations})`;
   }
   if (phase === "execution" && tasksTotal && tasksTotal > 0) {
-    const taskColor = tasksCompleted === tasksTotal ? APPLE_GREEN : APPLE_ORANGE;
+    const taskColor = tasksCompleted === tasksTotal ? GREEN9 : YELLOW8;
     output += ` | Tasks: ${taskColor}${tasksCompleted || 0}/${tasksTotal}${RESET}`;
   }
   if (filesCreated && filesCreated > 0) {
@@ -46627,11 +46854,16 @@ function renderAutopilot(state, _thresholds) {
   }
   return output;
 }
-var PHASE_NAMES, PHASE_INDEX;
+var CYAN7, GREEN9, YELLOW8, RED6, MAGENTA3, PHASE_NAMES, PHASE_INDEX;
 var init_autopilot2 = __esm({
   "src/hud/elements/autopilot.ts"() {
     "use strict";
     init_colors();
+    CYAN7 = "\x1B[36m";
+    GREEN9 = "\x1B[32m";
+    YELLOW8 = "\x1B[33m";
+    RED6 = "\x1B[31m";
+    MAGENTA3 = "\x1B[35m";
     PHASE_NAMES = {
       expansion: "Expand",
       planning: "Plan",
@@ -46677,9 +46909,9 @@ function renderCwd(cwd2, format = "relative", useHyperlinks = false) {
       displayPath = cwd2;
       break;
     case "folder": {
-      const parent = (0, import_node_path16.basename)((0, import_node_path16.dirname)(cwd2));
-      const folder = (0, import_node_path16.basename)(cwd2);
-      displayPath = parent ? (0, import_node_path16.join)(parent, folder) : folder;
+      const parent = (0, import_node_path17.basename)((0, import_node_path17.dirname)(cwd2));
+      const folder = (0, import_node_path17.basename)(cwd2);
+      displayPath = parent ? (0, import_node_path17.join)(parent, folder) : folder;
       break;
     }
     default:
@@ -46692,12 +46924,12 @@ function renderCwd(cwd2, format = "relative", useHyperlinks = false) {
   }
   return rendered;
 }
-var import_node_os5, import_node_path16;
+var import_node_os5, import_node_path17;
 var init_cwd = __esm({
   "src/hud/elements/cwd.ts"() {
     "use strict";
     import_node_os5 = require("node:os");
-    import_node_path16 = require("node:path");
+    import_node_path17 = require("node:path");
     init_colors();
   }
 });
@@ -46730,7 +46962,7 @@ function git2(args, cwd2) {
   }).trim();
 }
 function getGitRepoName(cwd2) {
-  const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
+  const key = cwd2 ? (0, import_node_path18.resolve)(cwd2) : process.cwd();
   const cached2 = repoCache.get(key);
   if (cached2 && Date.now() < cached2.expiresAt) {
     return cached2.value;
@@ -46751,7 +46983,7 @@ function getGitRepoName(cwd2) {
   return result;
 }
 function getGitBranch(cwd2) {
-  const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
+  const key = cwd2 ? (0, import_node_path18.resolve)(cwd2) : process.cwd();
   const cached2 = branchCache.get(key);
   if (cached2 && Date.now() < cached2.expiresAt) {
     return cached2.value;
@@ -46767,7 +46999,7 @@ function getGitBranch(cwd2) {
   return result;
 }
 function getWorktreeInfo(cwd2) {
-  const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
+  const key = cwd2 ? (0, import_node_path18.resolve)(cwd2) : process.cwd();
   const cached2 = worktreeCache.get(key);
   if (cached2 && Date.now() < cached2.expiresAt) {
     return cached2.value;
@@ -46776,18 +47008,18 @@ function getWorktreeInfo(cwd2) {
   try {
     const gitDir = git2(["rev-parse", "--git-dir"], cwd2);
     const gitCommonDir = git2(["rev-parse", "--git-common-dir"], cwd2);
-    let resolvedGitDir = (0, import_node_path17.resolve)(key, gitDir);
-    let resolvedCommonDir = (0, import_node_path17.resolve)(key, gitCommonDir);
+    let resolvedGitDir = (0, import_node_path18.resolve)(key, gitDir);
+    let resolvedCommonDir = (0, import_node_path18.resolve)(key, gitCommonDir);
     try {
-      resolvedGitDir = (0, import_node_fs13.realpathSync)(resolvedGitDir);
+      resolvedGitDir = (0, import_node_fs14.realpathSync)(resolvedGitDir);
     } catch {
     }
     try {
-      resolvedCommonDir = (0, import_node_fs13.realpathSync)(resolvedCommonDir);
+      resolvedCommonDir = (0, import_node_fs14.realpathSync)(resolvedCommonDir);
     } catch {
     }
     if (resolvedGitDir !== resolvedCommonDir) {
-      result = { isWorktree: true, worktreeName: (0, import_node_path17.basename)(resolvedGitDir) };
+      result = { isWorktree: true, worktreeName: (0, import_node_path18.basename)(resolvedGitDir) };
     }
   } catch {
   }
@@ -46797,19 +47029,19 @@ function getWorktreeInfo(cwd2) {
 function renderGitRepo(cwd2) {
   const repo = getGitRepoName(cwd2);
   if (!repo) return null;
-  return `${APPLE_GRAY}repo:${RESET}${APPLE_CYAN}${repo}${RESET}`;
+  return `${dim("repo:")}${cyan(repo)}`;
 }
 function renderGitBranch(cwd2) {
   const branch = getGitBranch(cwd2);
   if (!branch) return null;
   const wtInfo = getWorktreeInfo(cwd2);
   if (wtInfo.isWorktree && wtInfo.worktreeName) {
-    return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET} ${APPLE_GRAY}(wt:${RESET}${APPLE_CYAN}${wtInfo.worktreeName}${RESET}${APPLE_GRAY})${RESET}`;
+    return `${dim("branch:")}${cyan(branch)} ${dim("(wt:")}${cyan(wtInfo.worktreeName)}${dim(")")}`;
   }
-  return `${APPLE_GRAY}branch:${RESET}${APPLE_CYAN}${branch}${RESET}`;
+  return `${dim("branch:")}${cyan(branch)}`;
 }
 function getGitStatusCounts(cwd2) {
-  const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
+  const key = cwd2 ? (0, import_node_path18.resolve)(cwd2) : process.cwd();
   const cached2 = statusCache.get(key);
   if (cached2 && Date.now() < cached2.expiresAt) {
     return cached2.value;
@@ -46853,20 +47085,20 @@ function renderGitStatus(cwd2, labels = DEFAULT_HUD_LABELS) {
     return null;
   }
   const parts = [];
-  if (staged > 0) parts.push(`${APPLE_GREEN}${labels.staged}${staged}${RESET}`);
-  if (modified > 0) parts.push(`${APPLE_RED}${labels.modified}${modified}${RESET}`);
-  if (untracked > 0) parts.push(`${APPLE_CYAN}${labels.untracked}${untracked}${RESET}`);
-  if (ahead > 0) parts.push(`${APPLE_GREEN}${labels.ahead}${ahead}${RESET}`);
-  if (behind > 0) parts.push(`${APPLE_RED}${labels.behind}${behind}${RESET}`);
+  if (staged > 0) parts.push(`${green(labels.staged)}${staged}`);
+  if (modified > 0) parts.push(`${red(labels.modified)}${modified}`);
+  if (untracked > 0) parts.push(`${cyan(labels.untracked)}${untracked}`);
+  if (ahead > 0) parts.push(`${green(labels.ahead)}${ahead}`);
+  if (behind > 0) parts.push(`${red(labels.behind)}${behind}`);
   return parts.join(" ");
 }
-var import_node_child_process10, import_node_fs13, import_node_path17, CACHE_TTL_MS3, repoCache, branchCache, worktreeCache, statusCache;
+var import_node_child_process10, import_node_fs14, import_node_path18, CACHE_TTL_MS3, repoCache, branchCache, worktreeCache, statusCache;
 var init_git = __esm({
   "src/hud/elements/git.ts"() {
     "use strict";
     import_node_child_process10 = require("node:child_process");
-    import_node_fs13 = require("node:fs");
-    import_node_path17 = require("node:path");
+    import_node_fs14 = require("node:fs");
+    import_node_path18 = require("node:path");
     init_colors();
     init_types4();
     CACHE_TTL_MS3 = 3e4;
@@ -46893,27 +47125,27 @@ function isGitRepo(dir) {
   }
 }
 function looksLikeRepo(entryPath) {
-  return (0, import_node_fs14.existsSync)((0, import_node_path18.join)(entryPath, ".git"));
+  return (0, import_node_fs15.existsSync)((0, import_node_path19.join)(entryPath, ".git"));
 }
 function countActiveSessions(cwd2) {
-  const sessionsDir = (0, import_node_path18.join)(getOmcRoot(cwd2), "state", "sessions");
-  if (!(0, import_node_fs14.existsSync)(sessionsDir)) return 0;
+  const sessionsDir = (0, import_node_path19.join)(getOmcRoot(cwd2), "state", "sessions");
+  if (!(0, import_node_fs15.existsSync)(sessionsDir)) return 0;
   const now = Date.now();
   let active = 0;
   try {
-    const entries = (0, import_node_fs14.readdirSync)(sessionsDir, { withFileTypes: true });
+    const entries = (0, import_node_fs15.readdirSync)(sessionsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       if (!SESSION_ID_PATTERN.test(entry.name)) continue;
-      const dirPath = (0, import_node_path18.join)(sessionsDir, entry.name);
+      const dirPath = (0, import_node_path19.join)(sessionsDir, entry.name);
       let fresh = false;
       try {
-        if (now - (0, import_node_fs14.statSync)(dirPath).mtimeMs < ACTIVITY_WINDOW_MS) {
+        if (now - (0, import_node_fs15.statSync)(dirPath).mtimeMs < ACTIVITY_WINDOW_MS) {
           fresh = true;
         } else {
-          for (const f of (0, import_node_fs14.readdirSync)(dirPath)) {
+          for (const f of (0, import_node_fs15.readdirSync)(dirPath)) {
             try {
-              if (now - (0, import_node_fs14.statSync)((0, import_node_path18.join)(dirPath, f)).mtimeMs < ACTIVITY_WINDOW_MS) {
+              if (now - (0, import_node_fs15.statSync)((0, import_node_path19.join)(dirPath, f)).mtimeMs < ACTIVITY_WINDOW_MS) {
                 fresh = true;
                 break;
               }
@@ -46931,7 +47163,7 @@ function countActiveSessions(cwd2) {
   return active;
 }
 function detectMultiRepo(cwd2) {
-  const key = cwd2 ? (0, import_node_path18.resolve)(cwd2) : process.cwd();
+  const key = cwd2 ? (0, import_node_path19.resolve)(cwd2) : process.cwd();
   const cached2 = multiRepoCache.get(key);
   if (cached2 && Date.now() < cached2.expiresAt) {
     return cached2.value;
@@ -46944,11 +47176,11 @@ function detectMultiRepo(cwd2) {
     }
     let subrepoCount = 0;
     try {
-      const entries = (0, import_node_fs14.readdirSync)(key, { withFileTypes: true });
+      const entries = (0, import_node_fs15.readdirSync)(key, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
         if (entry.name.startsWith(".")) continue;
-        if (looksLikeRepo((0, import_node_path18.join)(key, entry.name))) subrepoCount++;
+        if (looksLikeRepo((0, import_node_path19.join)(key, entry.name))) subrepoCount++;
       }
     } catch {
     }
@@ -46956,12 +47188,12 @@ function detectMultiRepo(cwd2) {
       multiRepoCache.set(key, { value: null, expiresAt: Date.now() + CACHE_TTL_MS4 });
       return null;
     }
-    const hasMarker = (0, import_node_fs14.existsSync)((0, import_node_path18.join)(key, ".omc-workspace"));
+    const hasMarker = (0, import_node_fs15.existsSync)((0, import_node_path19.join)(key, ".omc-workspace"));
     const activeSessions = hasMarker ? countActiveSessions(key) : 0;
     result = {
       isMultiRepo: true,
       hasMarker,
-      parentName: (0, import_node_path18.basename)(key),
+      parentName: (0, import_node_path19.basename)(key),
       subrepoCount,
       activeSessions
     };
@@ -46980,13 +47212,13 @@ function renderMultiRepo(cwd2) {
   const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:~")}${green(String(info.activeSessions))}` : ` ${dim("sessions:~")}${dim("0")}`;
   return `${dim("mr:")}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
 }
-var import_node_child_process11, import_node_fs14, import_node_path18, ACTIVITY_WINDOW_MS, SESSION_ID_PATTERN, CACHE_TTL_MS4, multiRepoCache;
+var import_node_child_process11, import_node_fs15, import_node_path19, ACTIVITY_WINDOW_MS, SESSION_ID_PATTERN, CACHE_TTL_MS4, multiRepoCache;
 var init_multi_repo = __esm({
   "src/hud/elements/multi-repo.ts"() {
     "use strict";
     import_node_child_process11 = require("node:child_process");
-    import_node_fs14 = require("node:fs");
-    import_node_path18 = require("node:path");
+    import_node_fs15 = require("node:fs");
+    import_node_path19 = require("node:path");
     init_colors();
     init_worktree_paths();
     ACTIVITY_WINDOW_MS = 5 * 60 * 1e3;
@@ -47088,9 +47320,9 @@ function shouldUseAscii(format = "auto") {
 function getIcons(format = "auto", labels = DEFAULT_HUD_LABELS) {
   const useAscii = shouldUseAscii(format);
   return {
-    tool: useAscii ? `${APPLE_GRAY}${labels.tool}:${"\x1B[0m"}` : "\u{1F527}",
-    agent: useAscii ? `${APPLE_GRAY}${labels.agent}:${"\x1B[0m"}` : "\u{1F916}",
-    skill: useAscii ? `${APPLE_GRAY}${labels.skill}:${"\x1B[0m"}` : "\u26A1"
+    tool: useAscii ? `${labels.tool}:` : "\u{1F527}",
+    agent: useAscii ? `${labels.agent}:` : "\u{1F916}",
+    skill: useAscii ? `${labels.skill}:` : "\u26A1"
   };
 }
 function renderCallCounts(toolCalls, agentInvocations, skillUsages, format = "auto", labels = DEFAULT_HUD_LABELS) {
@@ -47112,7 +47344,6 @@ var init_call_counts = __esm({
     "use strict";
     init_platform();
     init_types4();
-    init_colors();
   }
 });
 
@@ -47123,7 +47354,7 @@ function renderContextLimitWarning(contextPercent, threshold, autoCompact) {
     return null;
   }
   const isCritical = safePercent >= 90;
-  const color = isCritical ? APPLE_RED : APPLE_ORANGE;
+  const color = isCritical ? RED7 : YELLOW9;
   const icon = isCritical ? "!!" : "!";
   const action = autoCompact ? "(auto-compact queued)" : "run /compact";
   return `${color}${BOLD2}[${icon}] ctx ${safePercent}% >= ${threshold}% threshold - ${action}${RESET}`;
@@ -47133,16 +47364,18 @@ function renderPayloadLimitWarning(payloadEstimate) {
     return null;
   }
   const isCritical = payloadEstimate.pressure === "critical";
-  const color = isCritical ? APPLE_RED : APPLE_YELLOW;
+  const color = isCritical ? RED7 : YELLOW9;
   const icon = isCritical ? "!!" : "!";
   const action = isCritical ? "compact may fail; consider new session" : "consider /compact soon";
   return `${color}${BOLD2}[${icon}] ${payloadEstimate.label} - ${action}${RESET}`;
 }
-var BOLD2;
+var YELLOW9, RED7, BOLD2;
 var init_context_warning = __esm({
   "src/hud/elements/context-warning.ts"() {
     "use strict";
     init_colors();
+    YELLOW9 = "\x1B[33m";
+    RED7 = "\x1B[31m";
     BOLD2 = "\x1B[1m";
   }
 });
@@ -47357,7 +47590,7 @@ async function render(context, config2) {
     if (custom3) rendered.set("customBuckets", custom3);
   }
   if (enabledElements.permissionStatus && context.pendingPermission) {
-    const permission = renderPermission(context.pendingPermission, hudLabels);
+    const permission = renderPermission(context.pendingPermission);
     if (permission) rendered.set("permission", permission);
   }
   if (enabledElements.thinking && context.thinkingState) {
@@ -47391,9 +47624,7 @@ async function render(context, config2) {
       const tokenUsage = renderTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
-        hudLabels,
-        config2.locale,
-        enabledElements.tokenFormat
+        hudLabels
       );
       if (tokenUsage) rendered.set("tokens", tokenUsage);
     }
@@ -47401,9 +47632,7 @@ async function render(context, config2) {
     const tokenUsage = renderTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
-      hudLabels,
-      config2.locale,
-      enabledElements.tokenFormat
+      hudLabels
     );
     if (tokenUsage) rendered.set("tokens", tokenUsage);
   }
@@ -47496,7 +47725,7 @@ async function render(context, config2) {
   const payloadWarning = renderPayloadLimitWarning(context.payloadEstimate);
   if (payloadWarning) renderedDetail.set("payloadWarning", [payloadWarning]);
   if (enabledElements.todos) {
-    const todos = renderTodosWithCurrent(context.todos, hudLabels);
+    const todos = renderTodosWithCurrent(context.todos);
     if (todos) renderedDetail.set("todos", [todos]);
   }
   const safeArray = (v, fallback) => Array.isArray(v) ? v : fallback;
@@ -47604,7 +47833,7 @@ var init_render = __esm({
     init_last_tool();
     ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
     PLAIN_SEPARATOR = " | ";
-    DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
+    DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
   }
 });
 
@@ -48079,7 +48308,7 @@ var {
 var ANSI_BACKGROUND_OFFSET = 10;
 var wrapAnsi16 = (offset = 0) => (code) => `\x1B[${code + offset}m`;
 var wrapAnsi256 = (offset = 0) => (code) => `\x1B[${38 + offset};5;${code}m`;
-var wrapAnsi16m = (offset = 0) => (red, green2, blue) => `\x1B[${38 + offset};2;${red};${green2};${blue}m`;
+var wrapAnsi16m = (offset = 0) => (red2, green2, blue) => `\x1B[${38 + offset};2;${red2};${green2};${blue}m`;
 var styles = {
   modifier: {
     reset: [0, 0],
@@ -48174,17 +48403,17 @@ function assembleStyles() {
   styles.bgColor.ansi16m = wrapAnsi16m(ANSI_BACKGROUND_OFFSET);
   Object.defineProperties(styles, {
     rgbToAnsi256: {
-      value(red, green2, blue) {
-        if (red === green2 && green2 === blue) {
-          if (red < 8) {
+      value(red2, green2, blue) {
+        if (red2 === green2 && green2 === blue) {
+          if (red2 < 8) {
             return 16;
           }
-          if (red > 248) {
+          if (red2 > 248) {
             return 231;
           }
-          return Math.round((red - 8) / 247 * 24) + 232;
+          return Math.round((red2 - 8) / 247 * 24) + 232;
         }
-        return 16 + 36 * Math.round(red / 255 * 5) + 6 * Math.round(green2 / 255 * 5) + Math.round(blue / 255 * 5);
+        return 16 + 36 * Math.round(red2 / 255 * 5) + 6 * Math.round(green2 / 255 * 5) + Math.round(blue / 255 * 5);
       },
       enumerable: false
     },
@@ -48221,25 +48450,25 @@ function assembleStyles() {
         if (code < 16) {
           return 90 + (code - 8);
         }
-        let red;
+        let red2;
         let green2;
         let blue;
         if (code >= 232) {
-          red = ((code - 232) * 10 + 8) / 255;
-          green2 = red;
-          blue = red;
+          red2 = ((code - 232) * 10 + 8) / 255;
+          green2 = red2;
+          blue = red2;
         } else {
           code -= 16;
           const remainder = code % 36;
-          red = Math.floor(code / 36) / 5;
+          red2 = Math.floor(code / 36) / 5;
           green2 = Math.floor(remainder / 6) / 5;
           blue = remainder % 6 / 5;
         }
-        const value = Math.max(red, green2, blue) * 2;
+        const value = Math.max(red2, green2, blue) * 2;
         if (value === 0) {
           return 30;
         }
-        let result = 30 + (Math.round(blue) << 2 | Math.round(green2) << 1 | Math.round(red));
+        let result = 30 + (Math.round(blue) << 2 | Math.round(green2) << 1 | Math.round(red2));
         if (value === 2) {
           result += 60;
         }
@@ -48248,7 +48477,7 @@ function assembleStyles() {
       enumerable: false
     },
     rgbToAnsi: {
-      value: (red, green2, blue) => styles.ansi256ToAnsi(styles.rgbToAnsi256(red, green2, blue)),
+      value: (red2, green2, blue) => styles.ansi256ToAnsi(styles.rgbToAnsi256(red2, green2, blue)),
       enumerable: false
     },
     hexToAnsi: {
@@ -82297,16 +82526,17 @@ var KEYWORD_PATTERNS = {
   team: /(?!x)x/,
   // never-match placeholder (type system requires the key)
   ralplan: /\b(ralplan)\b|(랄플랜)|(ラルプラン)/i,
-  tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)/i,
-  "code-review": /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)/i,
-  "security-review": /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)/i,
+  tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)|(テスト\s?ファースト)/i,
+  "code-review": /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)|(コード\s?レビュー)(?!ア)/i,
+  "security-review": /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)|(セキュリティ[ー]?\s?レビュー)(?!ア)/i,
   ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)/i,
-  deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)/i,
-  analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)/i,
-  "deep-interview": /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)/i,
-  ccg: /\b(ccg|claude-codex-gemini)\b|(씨씨지)/i,
+  deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)|(ディープ\s?サーチ)/i,
+  analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)|(ディープ\s?アナライズ)/i,
+  "deep-interview": /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)|(ディープインタビュー)/i,
+  ccg: /\b(ccg|claude-codex-gemini)\b|(씨씨지)|(シーシージー)/i,
   codex: /\b(ask|use|delegate\s+to)\s+(codex|gpt)\b/i,
-  gemini: /\b(ask|use|delegate\s+to)\s+gemini\b/i
+  gemini: /\b(ask|use|delegate\s+to)\s+gemini\b/i,
+  cursor: /\b(ask|use|delegate\s+to)\s+cursor\b/i
 };
 var OUROBOROS_BRAND_AT_START = /^\s*\/?(?:ouroboros|ooo)\b/i;
 var KEYWORD_SKIP_PREDICATES = {
@@ -82328,7 +82558,8 @@ var KEYWORD_PRIORITY = [
   "analyze",
   "deep-interview",
   "codex",
-  "gemini"
+  "gemini",
+  "cursor"
 ];
 var CANONICAL_WORKFLOW_SLASH_SKILLS = [
   "autopilot",
@@ -82474,6 +82705,11 @@ var NON_LATIN_SCRIPT_PATTERN = (
   // eslint-disable-next-line no-misleading-character-class -- Intentional: detecting script presence, not matching grapheme clusters
   /[\u3000-\u9FFF\uAC00-\uD7AF\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u0E00-\u0E7F\u1000-\u109F]/u
 );
+var PATH_SEGMENT_CHARS = "[\\w.\\-\\u3000-\\u9FFF\\uAC00-\\uD7AF\\u0400-\\u04FF\\u0600-\\u06FF\\u0900-\\u097F\\u0E00-\\u0E7F\\u1000-\\u109F]";
+var FILE_PATH_PATTERN = new RegExp(
+  "(^|[\\s\"'`(])(?:\\/)?(?:" + PATH_SEGMENT_CHARS + "+\\/)+(?:" + PATH_SEGMENT_CHARS + "*\\.\\w+|[\\w.\\-]+)",
+  "gm"
+);
 function sanitizeForKeywordDetection(text) {
   let result = stripPastedCommandPayloads(text);
   result = result.replace(/<!--[\s\S]*?-->/g, "");
@@ -82483,14 +82719,14 @@ function sanitizeForKeywordDetection(text) {
   result = result.replace(/^\s*>\s.*$/gm, "");
   result = result.replace(/^\s*\|(?:[^|\n]*\|){2,}\s*$/gm, "");
   result = result.replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|){1,}\s*$/gm, "");
-  result = result.replace(/(^|[\s"'`(])(?:\.?\/(?:[\w.-]+\/)*[\w.-]+|(?:[\w.-]+\/)+[\w.-]+\.\w+)/gm, "$1");
+  result = result.replace(FILE_PATH_PATTERN, "$1");
   result = removeCodeBlocks2(result);
   return result;
 }
 var INFORMATIONAL_INTENT_PATTERNS2 = [
   /\b(?:what(?:'s|\s+is)|what\s+are|how\s+(?:to|do\s+i)\s+use|explain|explanation|tell\s+me\s+about|describe)\b/i,
   /(?:뭐야|뭔데|무엇(?:이야|인가요)?|어떻게|설명(?!서\s*(?:작성|만들|생성|추가|업데이트|수정|편집|쓰))|사용법|알려\s?줘|알려줄래|소개해?\s?줘|소개\s*부탁|설명해\s?줘|뭐가\s*달라|어떤\s*기능|기능\s*(?:알려|설명|뭐)|방법\s*(?:알려|설명|뭐))/u,
-  /(?:とは|って何|使い方|説明|(?:について|に関して)[^\n]{0,24}(?:教えて|説明|知りたい))/u,
+  /(?:とは|って何|使い方|説明|(?:について|に関して|違い)[^\n]{0,24}(?:教えて|説明|知りたい)|(?:どう|何が|どこが)違う)/u,
   /(?:什么是|怎(?:么|樣)用|如何使用|解释|說明|说明)/u
 ];
 var INFORMATIONAL_CONTEXT_WINDOW2 = 80;
@@ -83764,7 +84000,7 @@ var DEFAULT_SECTION_NAMES = {
 var DEFAULT_BLOCKING_TOOLS = ["Edit", "MultiEdit", "Write", "Agent", "Task"];
 var DEFAULT_EXECUTION_KEYWORDS = ["ralph", "ultrawork", "autopilot"];
 var HEADING_PATTERN = /^#{1,6}\s+(.+?)\s*$/gm;
-var FILE_PATH_PATTERN = /(?:(?:^|\s|["'`(]))(\.{1,2}\/[^\s"'`)<>\]]+|\/[^\s"'`)<>\]]+|(?:[A-Za-z0-9_.-]+\/){1,}[A-Za-z0-9_.-]+)(?=$|\s|["'`),:;\]])/gm;
+var FILE_PATH_PATTERN2 = /(?:(?:^|\s|["'`(]))(\.{1,2}\/[^\s"'`)<>\]]+|\/[^\s"'`)<>\]]+|(?:[A-Za-z0-9_.-]+\/){1,}[A-Za-z0-9_.-]+)(?=$|\s|["'`),:;\]])/gm;
 function normalizeHeading(value) {
   return value.normalize("NFD").replace(new RegExp("\\p{M}+", "gu"), "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 }
@@ -83852,7 +84088,7 @@ function extractRequiredToolCalls(content) {
 }
 function extractFilePaths(content) {
   const paths = [];
-  for (const match of content.matchAll(FILE_PATH_PATTERN)) {
+  for (const match of content.matchAll(FILE_PATH_PATTERN2)) {
     const candidate = normalizePath3(match[1] ?? "");
     if (isLikelyPath(candidate)) {
       paths.push(candidate);
@@ -84762,7 +84998,7 @@ function getPromptText(input) {
   return "";
 }
 function isExplicitAskSlashInvocation(promptText) {
-  return /^\s*\/(?:oh-my-claudecode:)?ask\s+(?:claude|codex|gemini|grok)\b/i.test(promptText);
+  return /^\s*\/(?:oh-my-claudecode:)?ask\s+(?:claude|codex|gemini|grok|cursor)\b/i.test(promptText);
 }
 function activateRalplanStartupState(directory, sessionId) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -85070,7 +85306,8 @@ Running directly without heavy agent stacking. Prefix with \`quick:\`, \`simple:
         );
         break;
       case "codex":
-      case "gemini": {
+      case "gemini":
+      case "cursor": {
         const teamStartCommand = formatOmcCliInvocation(`team start --agent ${keywordType} --count N --task "<task from user message>"`);
         messages.push(
           `[MAGIC KEYWORD: team]
@@ -85395,7 +85632,7 @@ Please continue working on these tasks.
 This environment uses a non-standard model provider (AWS Bedrock, Google Vertex AI, or a proxy such as CC Switch / LiteLLM).
 
 How to pass \`model\` on Task/Agent calls:
-- Prefer a tier alias: \`model: "sonnet"\`, \`model: "opus"\`, or \`model: "haiku"\`. OMC's pre-tool enforcer resolves these to provider-safe IDs when one of these env vars is set: \`ANTHROPIC_DEFAULT_SONNET_MODEL\` (and sibling \`ANTHROPIC_DEFAULT_OPUS_MODEL\` / \`ANTHROPIC_DEFAULT_HAIKU_MODEL\`), \`CLAUDE_CODE_BEDROCK_SONNET_MODEL\` (and sibling \`CLAUDE_CODE_BEDROCK_OPUS_MODEL\` / \`CLAUDE_CODE_BEDROCK_HAIKU_MODEL\`), or \`OMC_SUBAGENT_MODEL\`.
+- Prefer a tier alias: \`model: "sonnet"\`, \`model: "opus"\`, \`model: "haiku"\`, or \`model: "fable"\` (Claude Fable 5, above Opus). OMC's pre-tool enforcer resolves these to provider-safe IDs when one of these env vars is set: \`ANTHROPIC_DEFAULT_SONNET_MODEL\` (and siblings \`ANTHROPIC_DEFAULT_OPUS_MODEL\` / \`ANTHROPIC_DEFAULT_HAIKU_MODEL\` / \`ANTHROPIC_DEFAULT_FABLE_MODEL\`), \`CLAUDE_CODE_BEDROCK_SONNET_MODEL\` (and siblings \`CLAUDE_CODE_BEDROCK_OPUS_MODEL\` / \`CLAUDE_CODE_BEDROCK_HAIKU_MODEL\` / \`CLAUDE_CODE_BEDROCK_FABLE_MODEL\`), or \`OMC_SUBAGENT_MODEL\`.
 - If none of those env vars are configured, the enforcer will deny the tier alias with an env-var configuration hint \u2014 set one of them in your \`settings.json\` env or shell profile.
 - The enforcer denies tier aliases it cannot resolve. It also denies provider-specific IDs that carry a \`[1m]\` context-window suffix or otherwise fail subagent-safe validation (sub-agents cannot inherit \`[1m]\`). Valid provider-specific IDs without extended-context suffixes are allowed.
 
@@ -86814,17 +87051,17 @@ var DEBUG_FILE = path17.join((0, import_os13.tmpdir)(), "comment-checker-debug.l
 var fs14 = __toESM(require("fs"), 1);
 
 // src/hooks/recovery/constants.ts
-var import_node_path10 = require("node:path");
+var import_node_path11 = require("node:path");
 var import_node_os3 = require("node:os");
 init_paths();
 function getClaudeCodeStorageDir() {
-  return (0, import_node_path10.join)(getDataDir(), "claude-code", "storage");
+  return (0, import_node_path11.join)(getDataDir(), "claude-code", "storage");
 }
 var CLAUDE_CODE_STORAGE = getClaudeCodeStorageDir();
-var MESSAGE_STORAGE = (0, import_node_path10.join)(CLAUDE_CODE_STORAGE, "message");
-var PART_STORAGE = (0, import_node_path10.join)(CLAUDE_CODE_STORAGE, "part");
+var MESSAGE_STORAGE = (0, import_node_path11.join)(CLAUDE_CODE_STORAGE, "message");
+var PART_STORAGE = (0, import_node_path11.join)(CLAUDE_CODE_STORAGE, "part");
 var DEBUG3 = process.env.RECOVERY_DEBUG === "1" || process.env.CONTEXT_LIMIT_RECOVERY_DEBUG === "1" || process.env.SESSION_RECOVERY_DEBUG === "1";
-var DEBUG_FILE2 = (0, import_node_path10.join)((0, import_node_os3.tmpdir)(), "recovery-debug.log");
+var DEBUG_FILE2 = (0, import_node_path11.join)((0, import_node_os3.tmpdir)(), "recovery-debug.log");
 
 // src/hooks/preemptive-compaction/index.ts
 var fs15 = __toESM(require("fs"), 1);
@@ -86846,10 +87083,10 @@ var DEFAULT_TASK_TTL_MS = 30 * 60 * 1e3;
 var BACKGROUND_TASKS_DIR = (0, import_path106.join)(getClaudeConfigDir(), ".omc", "background-tasks");
 
 // src/hooks/directory-readme-injector/constants.ts
-var import_node_path11 = require("node:path");
+var import_node_path12 = require("node:path");
 var import_node_os4 = require("node:os");
-var OMC_STORAGE_DIR2 = (0, import_node_path11.join)((0, import_node_os4.homedir)(), ".omc");
-var README_INJECTOR_STORAGE = (0, import_node_path11.join)(
+var OMC_STORAGE_DIR2 = (0, import_node_path12.join)((0, import_node_os4.homedir)(), ".omc");
+var README_INJECTOR_STORAGE = (0, import_node_path12.join)(
   OMC_STORAGE_DIR2,
   "directory-readme"
 );
@@ -88496,7 +88733,8 @@ var PROVIDER_BINARY = {
   claude: "claude",
   codex: "codex",
   gemini: "gemini",
-  grok: "grok"
+  grok: "grok",
+  cursor: "cursor-agent"
 };
 function probeProvider(provider) {
   const binary = PROVIDER_BINARY[provider];
@@ -88524,7 +88762,7 @@ function collectConfiguredProviders() {
   const roleRouting = cfg.team?.roleRouting ?? {};
   for (const spec of Object.values(roleRouting)) {
     const provider = spec?.provider;
-    if (provider === "claude" || provider === "codex" || provider === "gemini" || provider === "grok") {
+    if (provider === "claude" || provider === "codex" || provider === "gemini" || provider === "grok" || provider === "cursor") {
       providers.add(provider);
     }
   }
@@ -88621,8 +88859,8 @@ async function sessionSearchCommand(query, options, logger = console) {
 }
 
 // src/team/api-interop.ts
-var import_node_fs9 = require("node:fs");
-var import_node_path12 = require("node:path");
+var import_node_fs10 = require("node:fs");
+var import_node_path13 = require("node:path");
 init_worktree_paths();
 init_contracts();
 init_team_ops();
@@ -88743,8 +88981,8 @@ function parseTaskDelegationPlan(value) {
 }
 function teamStateExists(teamName, candidateCwd) {
   if (!TEAM_NAME_SAFE_PATTERN.test(teamName)) return false;
-  const teamRoot = (0, import_node_path12.join)(getOmcRoot(candidateCwd), "state", "team", teamName);
-  return (0, import_node_fs9.existsSync)((0, import_node_path12.join)(teamRoot, "config.json")) || (0, import_node_fs9.existsSync)((0, import_node_path12.join)(teamRoot, "tasks")) || (0, import_node_fs9.existsSync)(teamRoot);
+  const teamRoot = (0, import_node_path13.join)(getOmcRoot(candidateCwd), "state", "team", teamName);
+  return (0, import_node_fs10.existsSync)((0, import_node_path13.join)(teamRoot, "config.json")) || (0, import_node_fs10.existsSync)((0, import_node_path13.join)(teamRoot, "tasks")) || (0, import_node_fs10.existsSync)(teamRoot);
 }
 function parseTeamWorkerEnv(raw) {
   if (typeof raw !== "string" || raw.trim() === "") return null;
@@ -88798,23 +89036,23 @@ async function executeTeamCleanupViaRuntime(teamName, cwd2) {
   await teamCleanup(teamName, cwd2);
 }
 function readTeamStateRootFromFile(path22) {
-  if (!(0, import_node_fs9.existsSync)(path22)) return null;
+  if (!(0, import_node_fs10.existsSync)(path22)) return null;
   try {
-    const parsed = JSON.parse((0, import_node_fs9.readFileSync)(path22, "utf8"));
+    const parsed = JSON.parse((0, import_node_fs10.readFileSync)(path22, "utf8"));
     return typeof parsed.team_state_root === "string" && parsed.team_state_root.trim() !== "" ? parsed.team_state_root.trim() : null;
   } catch {
     return null;
   }
 }
 function stateRootToWorkingDirectory(stateRoot2) {
-  const absolute = (0, import_node_path12.resolve)(stateRoot2);
+  const absolute = (0, import_node_path13.resolve)(stateRoot2);
   const normalized = absolute.replaceAll("\\", "/");
   for (const marker of ["/.omc/state/team/", "/.omx/state/team/"]) {
     const idx = normalized.lastIndexOf(marker);
     if (idx >= 0) {
       const workspaceRoot = absolute.slice(0, idx);
       if (workspaceRoot && workspaceRoot !== "/") return workspaceRoot;
-      return (0, import_node_path12.dirname)((0, import_node_path12.dirname)((0, import_node_path12.dirname)((0, import_node_path12.dirname)(absolute))));
+      return (0, import_node_path13.dirname)((0, import_node_path13.dirname)((0, import_node_path13.dirname)((0, import_node_path13.dirname)(absolute))));
     }
   }
   for (const marker of ["/.omc/state", "/.omx/state"]) {
@@ -88822,22 +89060,22 @@ function stateRootToWorkingDirectory(stateRoot2) {
     if (idx >= 0) {
       const workspaceRoot = absolute.slice(0, idx);
       if (workspaceRoot && workspaceRoot !== "/") return workspaceRoot;
-      return (0, import_node_path12.dirname)((0, import_node_path12.dirname)(absolute));
+      return (0, import_node_path13.dirname)((0, import_node_path13.dirname)(absolute));
     }
   }
-  return (0, import_node_path12.dirname)((0, import_node_path12.dirname)(absolute));
+  return (0, import_node_path13.dirname)((0, import_node_path13.dirname)(absolute));
 }
 function resolveTeamWorkingDirectoryFromMetadata(teamName, candidateCwd, workerContext) {
-  const teamRoot = (0, import_node_path12.join)(getOmcRoot(candidateCwd), "state", "team", teamName);
-  if (!(0, import_node_fs9.existsSync)(teamRoot)) return null;
+  const teamRoot = (0, import_node_path13.join)(getOmcRoot(candidateCwd), "state", "team", teamName);
+  if (!(0, import_node_fs10.existsSync)(teamRoot)) return null;
   if (workerContext?.teamName === teamName) {
-    const workerRoot = readTeamStateRootFromFile((0, import_node_path12.join)(teamRoot, "workers", workerContext.workerName, "identity.json"));
+    const workerRoot = readTeamStateRootFromFile((0, import_node_path13.join)(teamRoot, "workers", workerContext.workerName, "identity.json"));
     if (workerRoot) return stateRootToWorkingDirectory(workerRoot);
   }
-  const fromConfig = readTeamStateRootFromFile((0, import_node_path12.join)(teamRoot, "config.json"));
+  const fromConfig = readTeamStateRootFromFile((0, import_node_path13.join)(teamRoot, "config.json"));
   if (fromConfig) return stateRootToWorkingDirectory(fromConfig);
   for (const manifestName of ["manifest.json", "manifest.v2.json"]) {
-    const fromManifest = readTeamStateRootFromFile((0, import_node_path12.join)(teamRoot, manifestName));
+    const fromManifest = readTeamStateRootFromFile((0, import_node_path13.join)(teamRoot, manifestName));
     if (fromManifest) return stateRootToWorkingDirectory(fromManifest);
   }
   return null;
@@ -88864,7 +89102,7 @@ function resolveTeamWorkingDirectory(teamName, preferredCwd) {
       if (teamStateExists(normalizedTeamName, cursor)) {
         return resolveTeamWorkingDirectoryFromMetadata(normalizedTeamName, cursor, workerContext) ?? cursor;
       }
-      const parent = (0, import_node_path12.dirname)(cursor);
+      const parent = (0, import_node_path13.dirname)(cursor);
       if (!parent || parent === cursor) break;
       cursor = parent;
     }
@@ -89490,14 +89728,14 @@ function inferDelegationPlanForTeamTask(text) {
 
 // src/cli/commands/team.ts
 init_loader();
-var import_node_fs10 = require("node:fs");
-var import_node_path13 = require("node:path");
+var import_node_fs11 = require("node:fs");
+var import_node_path14 = require("node:path");
 init_tmux_utils();
 init_worktree_paths();
 var HELP_TOKENS = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var MIN_WORKER_COUNT = 1;
 var MAX_WORKER_COUNT = 20;
-var VALID_TEAM_CLI_AGENT_TYPES = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok"]);
+var VALID_TEAM_CLI_AGENT_TYPES = /* @__PURE__ */ new Set(["claude", "codex", "gemini", "grok", "cursor"]);
 var DEFAULT_TEAM_CLI_AGENT_TYPE = "claude";
 var TEAM_HELP = `
 Usage: omc team [N:agent-type[:role]] [--new-window] [--auto-merge] [--no-decompose] "<task description>"
@@ -89511,6 +89749,7 @@ Examples:
   omc team 2:codex:architect "design auth system"
   omc team 1:gemini:executor "implement feature"
   omc team 1:codex,1:gemini "compare approaches"
+  omc team 1:cursor:executor "apply the implementation"
   omc team 2:codex "review auth flow" --new-window
   omc team status fix-failing-tests
   omc team shutdown fix-failing-tests
@@ -89650,13 +89889,13 @@ function slugifyTask(task) {
 }
 function resolveAvailableTeamName(baseName, cwd2) {
   const sanitizedBase = slugifyTask(baseName);
-  const stateRoot2 = (0, import_node_path13.join)(getOmcRoot(cwd2), "state", "team");
-  const teamDir3 = (name) => (0, import_node_path13.join)(stateRoot2, name);
-  if (!(0, import_node_fs10.existsSync)(teamDir3(sanitizedBase))) return sanitizedBase;
+  const stateRoot2 = (0, import_node_path14.join)(getOmcRoot(cwd2), "state", "team");
+  const teamDir3 = (name) => (0, import_node_path14.join)(stateRoot2, name);
+  if (!(0, import_node_fs11.existsSync)(teamDir3(sanitizedBase))) return sanitizedBase;
   for (let suffix = 2; suffix <= 99; suffix++) {
     const suffixText = `-${suffix}`;
     const candidate = `${sanitizedBase.slice(0, 30 - suffixText.length).replace(/-$/g, "")}${suffixText}`;
-    if (!(0, import_node_fs10.existsSync)(teamDir3(candidate))) return candidate;
+    if (!(0, import_node_fs11.existsSync)(teamDir3(candidate))) return candidate;
   }
   throw new Error(`Unable to allocate a fresh team name for ${sanitizedBase}; remove stale .omc/state/team entries or choose a more specific launch task.`);
 }
@@ -89722,6 +89961,11 @@ function normalizeWorkerSpecSegment(match) {
     return { count, agentType: "claude" };
   }
   if (explicitRole) {
+    if (!VALID_TEAM_CLI_AGENT_TYPES.has(token)) {
+      throw new Error(
+        `Invalid agent type "${token}" in worker spec "${match[0]}". Expected one of: ${[...VALID_TEAM_CLI_AGENT_TYPES].join(", ")}. For a role-only shorthand on the default agent, use "${count}:${explicitRole}".`
+      );
+    }
     return { count, agentType: token, role: explicitRole };
   }
   if (VALID_TEAM_CLI_AGENT_TYPES.has(token)) {
@@ -89804,6 +90048,11 @@ function parseTeamArgs(tokens, defaultAgentType = "claude") {
       filteredArgs.shift();
     }
   }
+  if (!explicitWorkerSpec && /^\d+:[a-z]/i.test(first)) {
+    throw new Error(
+      `Invalid worker spec "${first}". Expected "N:agent-type[:role]" (e.g. "3:codex" or "2:codex:architect"), optionally comma-separated (e.g. "1:codex,1:gemini"). Agent type must be one of: ${[...VALID_TEAM_CLI_AGENT_TYPES].join(", ")}.`
+    );
+  }
   if (agentTypes.length === 0) {
     agentTypes = Array.from({ length: workerCount }, () => normalizedDefaultAgentType);
     workerSpecs = Array.from({ length: workerCount }, () => ({ agentType: normalizedDefaultAgentType }));
@@ -89817,12 +90066,13 @@ function parseTeamArgs(tokens, defaultAgentType = "claude") {
 }
 function buildTeamLaunchTasks(parsed, decomposition, effectiveWorkerCount) {
   const tasks = [];
-  if (parsed.explicitWorkerSpec && !parsed.noDecompose && decomposition.strategy !== "atomic" && decomposition.subtasks.length > 1 && decomposition.subtasks.length !== effectiveWorkerCount) {
+  const isPreauthoredScopeList = decomposition.strategy === "numbered" || decomposition.strategy === "bulleted";
+  if (parsed.explicitWorkerSpec && !parsed.noDecompose && isPreauthoredScopeList && decomposition.subtasks.length > 1 && decomposition.subtasks.length !== effectiveWorkerCount) {
     throw new Error(
       `Pre-authored task scope count (${decomposition.subtasks.length}) must match explicit worker count (${effectiveWorkerCount}); use --no-decompose to give every worker the full launch text.`
     );
   }
-  const canUseDecomposition = !parsed.noDecompose && decomposition.strategy !== "atomic" && decomposition.subtasks.length > 1 && (!parsed.explicitWorkerSpec || decomposition.subtasks.length === effectiveWorkerCount);
+  const canUseDecomposition = !parsed.noDecompose && decomposition.strategy !== "atomic" && decomposition.subtasks.length > 1 && (!parsed.explicitWorkerSpec || isPreauthoredScopeList && decomposition.subtasks.length === effectiveWorkerCount);
   for (let i = 0; i < effectiveWorkerCount; i++) {
     const workerSpec = parsed.workerSpecs[i];
     const roleLabel = workerSpec?.role ? ` (${workerSpec.role})` : "";
@@ -91125,9 +91375,9 @@ function sleep5(ms) {
 var import_promises20 = require("node:fs/promises");
 
 // src/goal-workflows/claude-goal-snapshot.ts
-var import_node_fs11 = require("node:fs");
+var import_node_fs12 = require("node:fs");
 var import_promises18 = require("node:fs/promises");
-var import_node_path14 = require("node:path");
+var import_node_path15 = require("node:path");
 var ClaudeGoalSnapshotError = class extends Error {
 };
 function safeObject(value) {
@@ -91180,8 +91430,8 @@ async function readClaudeGoalSnapshotInput(raw, cwd2 = process.cwd()) {
   try {
     return parseClaudeGoalSnapshot(JSON.parse(trimmed));
   } catch {
-    const path22 = (0, import_node_path14.resolve)(cwd2, trimmed);
-    if (!(0, import_node_fs11.existsSync)(path22)) {
+    const path22 = (0, import_node_path15.resolve)(cwd2, trimmed);
+    if (!(0, import_node_fs12.existsSync)(path22)) {
       throw new ClaudeGoalSnapshotError(`Claude goal snapshot is neither valid JSON nor a readable path: ${trimmed}`);
     }
     try {
@@ -91224,9 +91474,9 @@ function formatClaudeGoalReconciliation(reconciliation) {
 }
 
 // src/ultragoal/artifacts.ts
-var import_node_fs12 = require("node:fs");
+var import_node_fs13 = require("node:fs");
 var import_promises19 = require("node:fs/promises");
-var import_node_path15 = require("node:path");
+var import_node_path16 = require("node:path");
 init_worktree_paths();
 var ULTRAGOAL_DIR = ".omc/ultragoal";
 var ULTRAGOAL_BRIEF = "brief.md";
@@ -91240,20 +91490,20 @@ function iso(now = /* @__PURE__ */ new Date()) {
 }
 function ultragoalDir(cwd2, planId) {
   const omcRoot = getOmcRoot(cwd2);
-  if (planId) return (0, import_node_path15.join)(omcRoot, "ultragoal", ULTRAGOAL_PLANS_SUBDIR, planId);
-  return (0, import_node_path15.join)(omcRoot, "ultragoal");
+  if (planId) return (0, import_node_path16.join)(omcRoot, "ultragoal", ULTRAGOAL_PLANS_SUBDIR, planId);
+  return (0, import_node_path16.join)(omcRoot, "ultragoal");
 }
 function ultragoalBriefPath(cwd2, planId) {
-  return (0, import_node_path15.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_BRIEF);
+  return (0, import_node_path16.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_BRIEF);
 }
 function ultragoalGoalsPath(cwd2, planId) {
-  return (0, import_node_path15.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_GOALS);
+  return (0, import_node_path16.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_GOALS);
 }
 function ultragoalLedgerPath(cwd2, planId) {
-  return (0, import_node_path15.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_LEDGER);
+  return (0, import_node_path16.join)(ultragoalDir(cwd2, planId), ULTRAGOAL_LEDGER);
 }
 async function listUltragoalPlanIds(cwd2) {
-  const dir = (0, import_node_path15.join)(getOmcRoot(cwd2), "ultragoal", ULTRAGOAL_PLANS_SUBDIR);
+  const dir = (0, import_node_path16.join)(getOmcRoot(cwd2), "ultragoal", ULTRAGOAL_PLANS_SUBDIR);
   try {
     const entries = await (0, import_promises19.readdir)(dir, { withFileTypes: true });
     return entries.filter((entry) => entry.isDirectory()).filter((entry) => /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(entry.name)).map((entry) => entry.name).sort();
@@ -91268,7 +91518,7 @@ async function resolveActivePlanId(cwd2, explicitPlanId) {
     }
     return explicitPlanId;
   }
-  if ((0, import_node_fs12.existsSync)((0, import_node_path15.join)(getOmcRoot(cwd2), "ultragoal", ULTRAGOAL_GOALS))) return void 0;
+  if ((0, import_node_fs13.existsSync)((0, import_node_path16.join)(getOmcRoot(cwd2), "ultragoal", ULTRAGOAL_GOALS))) return void 0;
   const plans = await listUltragoalPlanIds(cwd2);
   if (plans.length === 1) return plans[0];
   if (plans.length === 0) return void 0;
@@ -91283,7 +91533,7 @@ function makePlanId(brief, now) {
   return `${ts}-${slug}`;
 }
 function repoRelative(cwd2, path22) {
-  return (0, import_node_path15.relative)(cwd2, path22).split("\\").join("/");
+  return (0, import_node_path16.relative)(cwd2, path22).split("\\").join("/");
 }
 function cleanLine(line) {
   return line.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "").trim();
@@ -91424,7 +91674,7 @@ async function createUltragoalPlan(cwd2, options) {
   if (planId && !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(planId)) {
     throw new UltragoalError(`Invalid plan id: ${planId}. Allowed chars: a-z, 0-9, dot, underscore, hyphen.`);
   }
-  if (!options.force && (0, import_node_fs12.existsSync)(ultragoalGoalsPath(cwd2, planId))) {
+  if (!options.force && (0, import_node_fs13.existsSync)(ultragoalGoalsPath(cwd2, planId))) {
     const label = planId ? `${ULTRAGOAL_DIR}/${ULTRAGOAL_PLANS_SUBDIR}/${planId}/${ULTRAGOAL_GOALS}` : `${ULTRAGOAL_DIR}/${ULTRAGOAL_GOALS}`;
     throw new UltragoalError(`Refusing to overwrite existing ${label}; pass --force to recreate it.`);
   }
@@ -93296,14 +93546,14 @@ var import_path122 = require("path");
 var import_url16 = require("url");
 init_security_config();
 var ASK_USAGE = [
-  "Usage: omc ask <claude|codex|gemini|grok> <question or task>",
-  '   or: omc ask <claude|codex|gemini|grok> -p "<prompt>"',
-  '   or: omc ask <claude|codex|gemini|grok> --print "<prompt>"',
-  '   or: omc ask <claude|codex|gemini|grok> --prompt "<prompt>"',
-  '   or: omc ask <claude|codex|gemini|grok> --agent-prompt <role> "<prompt>"',
-  '   or: omc ask <claude|codex|gemini|grok> --agent-prompt=<role> --prompt "<prompt>"'
+  "Usage: omc ask <claude|codex|gemini|grok|cursor> <question or task>",
+  '   or: omc ask <claude|codex|gemini|grok|cursor> -p "<prompt>"',
+  '   or: omc ask <claude|codex|gemini|grok|cursor> --print "<prompt>"',
+  '   or: omc ask <claude|codex|gemini|grok|cursor> --prompt "<prompt>"',
+  '   or: omc ask <claude|codex|gemini|grok|cursor> --agent-prompt <role> "<prompt>"',
+  '   or: omc ask <claude|codex|gemini|grok|cursor> --agent-prompt=<role> --prompt "<prompt>"'
 ].join("\n");
-var ASK_PROVIDERS = ["claude", "codex", "gemini", "grok"];
+var ASK_PROVIDERS = ["claude", "codex", "gemini", "grok", "cursor"];
 var ASK_PROVIDER_SET = new Set(ASK_PROVIDERS);
 var ASK_AGENT_PROMPT_FLAG = "--agent-prompt";
 var SAFE_ROLE_PATTERN = /^[a-z][a-z0-9-]*$/;

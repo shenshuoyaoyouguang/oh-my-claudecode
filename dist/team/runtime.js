@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import { tmuxExecAsync } from '../cli/tmux-utils.js';
 import { buildWorkerArgv, resolveValidatedBinaryPath, getWorkerEnv as getModelWorkerEnv, isPromptModeAgent, getPromptModeArgs, resolveClaudeWorkerModel } from './model-contract.js';
 import { validateTeamName } from './team-name.js';
-import { createTeamSession, spawnWorkerInPane, sendToWorker, isWorkerAlive, killTeamSession, resolveSplitPaneWorkerPaneIds, waitForPaneReady, applyMainVerticalLayout, killTeamPane, } from './tmux-session.js';
+import { createTeamSession, spawnWorkerInPane, sendToWorker, isWorkerAlive, killTeamSession, resolveSplitPaneWorkerPaneIds, waitForPaneReady, applyMainVerticalLayout, killTeamPane, splitTeamWorkerPane, } from './tmux-session.js';
 import { composeInitialInbox, ensureWorkerStateDir, writeWorkerOverlay, generateTriggerMessage, } from './worker-bootstrap.js';
 import { cleanupTeamWorktrees } from './git-worktree.js';
 import { withTaskLock, writeTaskFailure, DEFAULT_MAX_TASK_RETRIES, } from './task-file-ops.js';
@@ -347,7 +347,7 @@ export async function monitorTeam(teamName, cwd, workerPaneIds) {
         workers.push(status);
         if (!alive)
             deadWorkers.push(wName);
-        // Note: CLI workers (codex/gemini/grok) may not write heartbeat.json — stall is advisory only
+        // Note: CLI workers (codex/gemini/grok/cursor) may not write heartbeat.json — stall is advisory only
     }
     const workerScanMs = Date.now() - workerScanStartedAt;
     // Infer phase from task counts
@@ -521,13 +521,8 @@ export async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
     const splitTarget = runtime.workerPaneIds.length === 0
         ? runtime.leaderPaneId
         : runtime.workerPaneIds[runtime.workerPaneIds.length - 1];
-    const splitType = runtime.workerPaneIds.length === 0 ? '-h' : '-v';
-    const splitResult = await tmuxExecAsync([
-        'split-window', splitType, '-t', splitTarget,
-        '-d', '-P', '-F', '#{pane_id}',
-        '-c', runtime.cwd,
-    ]);
-    const paneId = splitResult.stdout.split('\n')[0]?.trim();
+    const splitDirection = runtime.workerPaneIds.length === 0 ? 'right' : 'down';
+    const paneId = await splitTeamWorkerPane(splitTarget, splitDirection, runtime.cwd);
     if (!paneId) {
         try {
             await resetTaskToPending(root, taskId, runtime.teamName, runtime.cwd);
@@ -571,6 +566,9 @@ export async function spawnWorkerForTask(runtime, workerNameValue, taskIndex) {
             return process.env.OMC_EXTERNAL_MODELS_DEFAULT_GROK_MODEL
                 || process.env.OMC_GROK_DEFAULT_MODEL
                 || undefined;
+        }
+        if (agentType === 'cursor') {
+            return undefined;
         }
         // Claude agents: resolve Bedrock/Vertex model when on those providers
         return resolveClaudeWorkerModel();
@@ -714,11 +712,11 @@ export async function shutdownTeam(teamName, sessionName, cwd, timeoutMs = 30_00
         teamName,
     });
     const configData = await readJsonSafe(join(root, 'config.json'));
-    // CLI workers (claude/codex/gemini/grok tmux pane processes) never write shutdown-ack.json.
+    // CLI workers (claude/codex/gemini/grok/cursor tmux pane processes) never write shutdown-ack.json.
     // Polling for ACK files on CLI worker teams wastes the full timeoutMs on every shutdown.
     // Detect CLI worker teams by checking if all agent types are known CLI types, and skip
     // ACK polling — the tmux kill below handles process cleanup instead.
-    const CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini', 'grok']);
+    const CLI_AGENT_TYPES = new Set(['claude', 'codex', 'gemini', 'grok', 'cursor']);
     const agentTypes = configData?.agentTypes ?? [];
     const isCliWorkerTeam = agentTypes.length > 0 && agentTypes.every(t => CLI_AGENT_TYPES.has(t));
     if (!isCliWorkerTeam) {
