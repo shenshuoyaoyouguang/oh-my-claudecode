@@ -318,6 +318,8 @@ export interface HudRenderContext {
     lastToolName?: string | null;
     /** Best-effort local transcript-backed request payload pressure estimate. */
     payloadEstimate?: PayloadEstimate | null;
+    /** Per-preset semantic color palette for theme-aware rendering. */
+    theme?: import('./colors.js').ThemeColors;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense';
 /**
@@ -432,6 +434,14 @@ export interface HudElementConfig {
     sessionSummary: boolean;
     maxOutputLines: number;
     safeMode: boolean;
+    /** Icon prefix style for element labels (default: 'none').
+     *  'emoji' — use emoji icons (e.g. 🔧 🧠 ⚡)
+     *  'ascii' — use plain-text labels (e.g. [T] [A] [S])
+     *  'none'  — no icon prefix (current behavior) */
+    iconSet?: 'emoji' | 'ascii' | 'none';
+    /** Enable compact mode when context exceeds 80% (default: false).
+     *  Shortens label text to reduce visual density under memory pressure. */
+    compactMode?: boolean;
 }
 export interface HudThresholds {
     /** Context percentage that triggers warning color (default: 70) */
@@ -490,6 +500,10 @@ export interface HudConfig {
     maxWidth?: number;
     /** Controls maxWidth behavior: truncate with ellipsis (default) or wrap at " | " HUD element boundaries. */
     wrapMode?: 'truncate' | 'wrap';
+    /** Separator style between HUD elements (default: 'pipe'). */
+    separatorStyle?: 'pipe' | 'dot' | 'space';
+    /** Progress bar character style (default: 'block'). */
+    progressBarStyle?: 'block' | 'smooth' | 'dot';
     /** Optional element ordering. Overrides default order when set. Presets still control on/off. */
     layout?: LayoutConfig;
 }

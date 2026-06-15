@@ -416,6 +416,9 @@ export interface HudRenderContext {
 
   /** Best-effort local transcript-backed request payload pressure estimate. */
   payloadEstimate?: PayloadEstimate | null;
+
+  /** Per-preset semantic color palette for theme-aware rendering. */
+  theme?: import('./colors.js').ThemeColors;
 }
 
 // ============================================================================
@@ -626,6 +629,15 @@ export interface HudElementConfig {
   maxOutputLines: number;     // Max total output lines to prevent input field shrinkage
   safeMode: boolean;          // Strip ANSI codes and use ASCII-only output to prevent terminal rendering corruption (Issue #346).
                               // Default true. Set to false to explicitly disable even on Windows (e.g. Windows Terminal with ANSI support).
+	  /** Icon prefix style for element labels (default: 'none').
+	   *  'emoji' — use emoji icons (e.g. 🔧 🧠 ⚡)
+	   *  'ascii' — use plain-text labels (e.g. [T] [A] [S])
+	   *  'none'  — no icon prefix (current behavior) */
+	  iconSet?: 'emoji' | 'ascii' | 'none';
+
+  /** Enable compact mode when context exceeds 80% (default: false).
+   *  Shortens label text to reduce visual density under memory pressure. */
+  compactMode?: boolean;
 }
 
 export interface HudThresholds {
@@ -703,6 +715,10 @@ export interface HudConfig {
   maxWidth?: number;
   /** Controls maxWidth behavior: truncate with ellipsis (default) or wrap at " | " HUD element boundaries. */
   wrapMode?: 'truncate' | 'wrap';
+	  /** Separator style between HUD elements (default: 'pipe'). */
+	  separatorStyle?: 'pipe' | 'dot' | 'space';
+	  /** Progress bar character style (default: 'block'). */
+	  progressBarStyle?: 'block' | 'smooth' | 'dot';
   /** Optional element ordering. Overrides default order when set. Presets still control on/off. */
   layout?: LayoutConfig;
 }
@@ -756,6 +772,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     sessionSummary: false, // Disabled by default - opt-in AI-generated session summary
     maxOutputLines: 4,
     safeMode: true,  // Enabled by default to prevent terminal rendering corruption (Issue #346)
+    iconSet: 'none',
   },
   thresholds: {
     contextWarning: 70,
@@ -771,6 +788,8 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
   missionBoard: DEFAULT_MISSION_BOARD_CONFIG,
   usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
   wrapMode: 'truncate',
+  separatorStyle: 'pipe',
+  progressBarStyle: 'block',
 };
 
 export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {

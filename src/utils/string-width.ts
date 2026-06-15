@@ -12,6 +12,39 @@
  */
 
 /**
+ * Check if a character code point is a wide emoji (typically rendered as
+ * 2 columns in modern terminals).
+ *
+ * Covers the main emoji and symbol ranges that terminals render as double-width:
+ * - Emoticons, Miscellaneous Symbols, Pictographs, Supplemental Symbols
+ * - Geometric Shapes, Dingbats
+ * - Private Use Area (Powerline, Nerd Font icons like )
+ */
+export function isWideTerminalChar(codePoint: number): boolean {
+  return (
+    // Emoticons (U+1F600-U+1F64F)
+    (codePoint >= 0x1f600 && codePoint <= 0x1f64f) ||
+    // Miscellaneous Symbols and Pictographs (U+1F300-U+1F5FF)
+    (codePoint >= 0x1f300 && codePoint <= 0x1f5ff) ||
+    // Supplemental Symbols and Pictographs (U+1F900-U+1F9FF)
+    (codePoint >= 0x1f900 && codePoint <= 0x1f9ff) ||
+    // Symbols and Pictographs Extended-A (U+1FA70-U+1FAFF)
+    (codePoint >= 0x1fa70 && codePoint <= 0x1faff) ||
+    // Dingbats (U+2700-U+27BF) — select wide chars like ❌ ✅
+    (codePoint >= 0x2702 && codePoint <= 0x27b0) ||
+    // Miscellaneous Symbols (U+2600-U+26FF) — select wide chars like ⚡
+    (codePoint >= 0x2600 && codePoint <= 0x26ff) ||
+    // Geometric Shapes Extended (U+1F780-U+1F7FF)
+    (codePoint >= 0x1f780 && codePoint <= 0x1f7ff) ||
+    // Transport and Map Symbols (U+1F680-U+1F6FF)
+    (codePoint >= 0x1f680 && codePoint <= 0x1f6ff) ||
+    // Powerline / Nerd Font private-use symbols (U+E000-U+F8FF)
+    // Most Nerd Font glyphs like   󰀀 etc. live here
+    (codePoint >= 0xe000 && codePoint <= 0xf8ff)
+  );
+}
+
+/**
  * Check if a character code point is a CJK (double-width) character.
  *
  * This covers the main CJK Unicode ranges:
@@ -98,6 +131,7 @@ export function getCharWidth(char: string): number {
 
   if (isZeroWidth(codePoint)) return 0;
   if (isCJKCharacter(codePoint)) return 2;
+  if (isWideTerminalChar(codePoint)) return 2;
   return 1;
 }
 

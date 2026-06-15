@@ -75,8 +75,8 @@ describe('renderEnterpriseCost', () => {
             enterpriseCurrency: 'USD',
         });
         const result = renderEnterpriseCost(limits);
-        // Green ANSI code is \x1b[32m
-        expect(result).toContain('\x1b[32m');
+        // Apple 24-bit true-color green (#30D158)
+        expect(result).toContain('\x1b[38;2;48;209;88m');
     });
     it('applies yellow color at 70% utilization', () => {
         const limits = base({
@@ -86,8 +86,8 @@ describe('renderEnterpriseCost', () => {
             enterpriseCurrency: 'USD',
         });
         const result = renderEnterpriseCost(limits);
-        // Yellow ANSI code is \x1b[33m
-        expect(result).toContain('\x1b[33m');
+        // Apple 24-bit true-color orange (#FF9F0A) <-- enterprise-cost uses orange not yellow
+        expect(result).toContain('\x1b[38;2;255;159;10m');
     });
     it('applies red color at 90% utilization', () => {
         const limits = base({
@@ -97,8 +97,8 @@ describe('renderEnterpriseCost', () => {
             enterpriseCurrency: 'USD',
         });
         const result = renderEnterpriseCost(limits);
-        // Red ANSI code is \x1b[31m
-        expect(result).toContain('\x1b[31m');
+        // Apple 24-bit true-color red (#FF453A)
+        expect(result).toContain('\x1b[38;2;255;69;58m');
     });
     it('defaults currency to USD when enterpriseCurrency is absent', () => {
         const limits = base({

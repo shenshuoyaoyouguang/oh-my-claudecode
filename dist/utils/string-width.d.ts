@@ -11,6 +11,16 @@
  * Related: Issue #344 - Korean IME input visibility
  */
 /**
+ * Check if a character code point is a wide emoji (typically rendered as
+ * 2 columns in modern terminals).
+ *
+ * Covers the main emoji and symbol ranges that terminals render as double-width:
+ * - Emoticons, Miscellaneous Symbols, Pictographs, Supplemental Symbols
+ * - Geometric Shapes, Dingbats
+ * - Private Use Area (Powerline, Nerd Font icons like )
+ */
+export declare function isWideTerminalChar(codePoint: number): boolean;
+/**
  * Check if a character code point is a CJK (double-width) character.
  *
  * This covers the main CJK Unicode ranges:

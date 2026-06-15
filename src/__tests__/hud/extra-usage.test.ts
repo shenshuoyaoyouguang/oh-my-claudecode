@@ -214,8 +214,8 @@ describe('renderRateLimits — extra usage', () => {
       extraUsageLimitUsd: 17,
     };
     const result = renderRateLimits(limits);
-    // Red ANSI code before the percentage
-    expect(result).toContain('\x1b[31m');
+    // Apple 24-bit true-color red (#FF453A)
+    expect(result).toContain('\x1b[38;2;255;69;58m');
   });
 
   it('uses green color at < 70%', () => {
@@ -226,10 +226,10 @@ describe('renderRateLimits — extra usage', () => {
       extraUsageLimitUsd: 17,
     };
     const result = renderRateLimits(limits);
-    // Green ANSI code before the extra percentage
+    // Apple 24-bit true-color green (#30D158)
     const extraIndex = result!.indexOf('extra:');
     const afterExtra = result!.slice(extraIndex);
-    expect(afterExtra).toContain('\x1b[32m');
+    expect(afterExtra).toContain('\x1b[38;2;48;209;88m');
   });
 
   it('renders stale marker when stale=true', () => {

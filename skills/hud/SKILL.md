@@ -106,26 +106,37 @@ node -e "const p=require('path'),f=require('fs'),d=process.env.CLAUDE_CONFIG_DIR
 
 ## Display Presets
 
+Each preset has a distinct visual identity — choose one that matches your terminal environment and preference.
+
 ### Minimal
-Shows only the essentials:
+Low visual noise. Uses monochrome grayscale with bold-red only for critical states. Best for pure-text terminals.
 ```
 [OMC] ralph | ultrawork | todos:2/5
 ```
 
 ### Focused (Default)
-Shows all relevant elements:
+Apple Terminal palette with vibrant true-color. Balanced information density.
 ```
 [OMC] branch:main | ralph:3/10 | US-002 | ultrawork skill:planner | ctx:67% | agents:2 | bg:3/5 | todos:2/5
 ```
 
 ### Full
-Shows everything including multi-line agent details:
+High-contrast Apple palette (brighter yellow for warnings, blue for info). Shows everything including multi-line agent details.
 ```
 [OMC] repo:oh-my-claudecode branch:main | ralph:3/10 | US-002 (2/5) | ultrawork | ctx:[████░░]67% | agents:3 | bg:3/5 | todos:2/5
 ├─ O architect    2m   analyzing architecture patterns...
 ├─ e explore     45s   searching for test files
 └─ s executor     1m   implementing validation logic
 ```
+
+### Dense
+Standard ANSI 16-color palette for maximum terminal compatibility. Compact single-line layout.
+```
+[OMC] repo:omc branch:main ralph:3/10 ctx:67% agents:2 bg:3/5 todos:2/5
+```
+
+### Opencode
+Matches the Apple-focused palette for OpenCode editor compatibility. Same colors as Focused preset.
 
 ## Multi-Line Agent Display
 
@@ -153,9 +164,23 @@ When agents are running, the HUD shows detailed information on separate lines:
 
 ## Color Coding
 
-- **Green**: Normal/healthy
-- **Yellow**: Warning (context >70%, ralph >7)
-- **Red**: Critical (context >85%, ralph at max)
+Each preset has its own color palette. Colors follow semantic naming:
+- **Success** (🟢 green): Normal/healthy, low usage, completed tasks
+- **Warning** (🟠 orange/yellow): Moderate usage (context >70%, ralph >70%)
+- **Error** (🔴 red): Critical (context >85%, ralph at max, failure states)
+- **Info** (🔵 cyan/blue): Informational labels, git branch, model names
+- **Muted** (⚪ gray/dim): Secondary labels, separators
+- **Accent** (🟣 purple/magenta): Highlighted elements (skills, team modes)
+
+### Preset Color Palettes
+
+| Preset | Palette | Best for |
+|--------|---------|----------|
+| `focused` | Apple Terminal (24-bit true color) | Default — balanced, vibrant |
+| `minimal` | Monochrome grayscale | Low visual noise, pure-text terminals |
+| `full` | Apple high-contrast (yellow/blue) | Maximum readability |
+| `dense` | Standard ANSI (16-color) | Compatible terminals, low saturation |
+| `opencode` | Apple Terminal (same as focused) | OpenCode compatibility |
 
 ## Configuration Location
 

@@ -140,6 +140,7 @@ export const DEFAULT_HUD_CONFIG = {
         sessionSummary: false, // Disabled by default - opt-in AI-generated session summary
         maxOutputLines: 4,
         safeMode: true, // Enabled by default to prevent terminal rendering corruption (Issue #346)
+        iconSet: 'none',
     },
     thresholds: {
         contextWarning: 70,
@@ -155,6 +156,8 @@ export const DEFAULT_HUD_CONFIG = {
     missionBoard: DEFAULT_MISSION_BOARD_CONFIG,
     usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
     wrapMode: 'truncate',
+    separatorStyle: 'pipe',
+    progressBarStyle: 'block',
 };
 export const PRESET_CONFIGS = {
     minimal: {

@@ -36,6 +36,7 @@ import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { refreshMissionBoardState } from "./mission-board.js";
 import { sanitizeOutput } from "./sanitize.js";
+import { resolveThemeColors } from "./colors.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
 import type {
   HudRenderContext,
@@ -497,6 +498,7 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       sessionSummary,
       lastToolName: transcriptData.lastToolName,
       payloadEstimate,
+      theme: resolveThemeColors(config.preset),
     };
 
     // Debug: log data if OMC_DEBUG is set
@@ -544,7 +546,11 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
     }
 
     // Render and output
-    let output = await render(context, config);
+    // ── V2: Compact mode — shorten labels when context is high ─────
+    const effectiveConfig = config.elements.compactMode && context.contextPercent >= 80
+    ? { ...config, labels: { ...(config.labels ?? {}), ralph: 'r', context: 'c', thinking: 't', background: 'bg' } }
+    : config;
+    let output = await render(context, effectiveConfig as typeof config);
 
     // Apply safe mode sanitization if enabled (Issue #346)
     // This strips ANSI codes and uses ASCII-only output to prevent

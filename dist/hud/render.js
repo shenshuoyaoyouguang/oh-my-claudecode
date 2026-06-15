@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim, APPLE_GRAY, RESET } from "./colors.js";
+import { bold, APPLE_GRAY, RESET } from "./colors.js";
 import { isRuntimePackageLocal } from "../lib/version.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderRalph } from "./elements/ralph.js";
@@ -40,6 +40,52 @@ import { renderLastTool } from "./elements/last-tool.js";
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
 const DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
+// ── V2: Icon prefix system ────────────────────────────────────────
+/** Maps element names to their icon pairs (emoji, ascii). */
+const ELEMENT_ICONS = {
+    ralph: ['🔄', '[R]'],
+    autopilot: ['🤖', '[A]'],
+    prd: ['📋', '[P]'],
+    context: ['📊', '[C]'],
+    contextBar: ['📊', '[C]'],
+    agents: ['👥', '[Ag]'],
+    background: ['⚙️', '[Bg]'],
+    todos: ['✅', '[T]'],
+    skills: ['⚡', '[Sk]'],
+    lastSkill: ['⚡', '[Sk]'],
+    model: ['🧠', '[M]'],
+    session: ['⏱️', '[S]'],
+    thinking: ['💭', '[Th]'],
+    permission: ['🔒', '[Pm]'],
+    omcLabel: ['🅾️', '[O]'],
+    rateLimits: ['⏳', '[L]'],
+    tokens: ['📝', '[Tk]'],
+    promptTime: ['🕐', '[Pt]'],
+    callCounts: ['🔧', '[Cc]'],
+    lastTool: ['🔨', '[Lt]'],
+    hostname: ['🖥️', '[H]'],
+    enterpriseCost: ['💰', '[Ec]'],
+};
+function iconPrefixFor(element, iconSet) {
+    if (!iconSet || iconSet === 'none')
+        return '';
+    const pair = ELEMENT_ICONS[element];
+    if (!pair)
+        return '';
+    const [emoji, ascii] = pair;
+    return iconSet === 'emoji' ? `${emoji} ` : `${ascii} `;
+}
+const SEPARATOR_CHARS = {
+    pipe: ' | ',
+    dot: ' · ',
+    space: '  ',
+};
+function buildSeparator(style, theme) {
+    const sep = SEPARATOR_CHARS[style ?? 'pipe'] ?? SEPARATOR_CHARS.pipe;
+    if (!theme)
+        return `${APPLE_GRAY}${sep}${RESET}`;
+    return `${theme.muted}${sep}${RESET}`;
+}
 function buildMainElementOrder(elementOrder) {
     if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
         return DEFAULT_ELEMENT_ORDER.main;
@@ -111,16 +157,17 @@ export function truncateLineToMaxWidth(line, maxWidth) {
  * - no separator is present
  * - any single segment exceeds maxWidth
  */
-function wrapLineToMaxWidth(line, maxWidth) {
+function wrapLineToMaxWidth(line, maxWidth, separatorHint) {
     if (maxWidth <= 0)
         return [""];
     if (stringWidth(line) <= maxWidth)
         return [line];
-    const separator = line.includes(DIM_SEPARATOR)
-        ? DIM_SEPARATOR
-        : line.includes(PLAIN_SEPARATOR)
-            ? PLAIN_SEPARATOR
-            : null;
+    // Try to detect the separator used in this line
+    const candidates = [];
+    if (separatorHint)
+        candidates.push(separatorHint);
+    candidates.push(DIM_SEPARATOR, PLAIN_SEPARATOR, ' · ', '  ', ' | ');
+    const separator = candidates.find((s) => line.includes(s)) ?? null;
     if (!separator) {
         return [truncateLineToMaxWidth(line, maxWidth)];
     }
@@ -156,11 +203,11 @@ function wrapLineToMaxWidth(line, maxWidth) {
 /**
  * Apply maxWidth behavior by mode.
  */
-function applyMaxWidthByMode(lines, maxWidth, wrapMode) {
+function applyMaxWidthByMode(lines, maxWidth, wrapMode, separator) {
     if (!maxWidth || maxWidth <= 0)
         return lines;
     if (wrapMode === "wrap") {
-        return lines.flatMap((line) => wrapLineToMaxWidth(line, maxWidth));
+        return lines.flatMap((line) => wrapLineToMaxWidth(line, maxWidth, separator));
     }
     return lines.map((line) => truncateLineToMaxWidth(line, maxWidth));
 }
@@ -430,6 +477,14 @@ export async function render(context, config) {
         main: safeArray(config.layout?.main, buildMainElementOrder(config.elementOrder)),
         detail: safeArray(config.layout?.detail, DEFAULT_ELEMENT_ORDER.detail),
     };
+    // ── V2: Inject icon prefixes into rendered elements ──────────────
+    if (config.elements.iconSet && config.elements.iconSet !== 'none') {
+        for (const [name, value] of rendered) {
+            const prefix = iconPrefixFor(name, config.elements.iconSet);
+            if (prefix)
+                rendered.set(name, prefix + value);
+        }
+    }
     /** Collect inline elements in layout order.
      *  Also picks up detail-origin elements moved to an inline group —
      *  their detail lines are joined into a single inline string. */
@@ -475,8 +530,10 @@ export async function render(context, config) {
     const detailLines = collectDetailLines(effectiveLayout.detail);
     // Compose output
     const outputLines = [];
-    const gitInfoLine = gitElements.length > 0 ? gitElements.join(dim(PLAIN_SEPARATOR)) : null;
-    const headerLine = elements.length > 0 ? elements.join(dim(PLAIN_SEPARATOR)) : null;
+    const separator = buildSeparator(config.separatorStyle, context.theme);
+    const iconSet = config.elements.iconSet ?? 'none';
+    const gitInfoLine = gitElements.length > 0 ? gitElements.join(separator) : null;
+    const headerLine = elements.length > 0 ? elements.join(separator) : null;
     const gitPosition = config.elements.gitInfoPosition ?? "above";
     if (gitPosition === "above") {
         if (gitInfoLine) {
@@ -494,7 +551,7 @@ export async function render(context, config) {
             outputLines.push(gitInfoLine);
         }
     }
-    const widthAdjustedLines = applyMaxWidthByMode([...outputLines, ...detailLines], config.maxWidth, config.wrapMode);
+    const widthAdjustedLines = applyMaxWidthByMode([...outputLines, ...detailLines], config.maxWidth, config.wrapMode, separator);
     // Apply max output line limit after wrapping so wrapped output still respects maxOutputLines.
     const limitedLines = limitOutputLines(widthAdjustedLines, config.elements.maxOutputLines);
     // Ensure line-limit indicator and all other lines still respect maxWidth.

@@ -56,6 +56,55 @@ const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
 const DIM_SEPARATOR = `${APPLE_GRAY} | ${RESET}`;
 
+// ── V2: Icon prefix system ────────────────────────────────────────
+/** Maps element names to their icon pairs (emoji, ascii). */
+const ELEMENT_ICONS: Record<string, [emoji: string, ascii: string]> = {
+  ralph:       ['🔄', '[R]'],
+  autopilot:   ['🤖', '[A]'],
+  prd:         ['📋', '[P]'],
+  context:     ['📊', '[C]'],
+  contextBar:  ['📊', '[C]'],
+  agents:      ['👥', '[Ag]'],
+  background:  ['⚙️', '[Bg]'],
+  todos:       ['✅', '[T]'],
+  skills:      ['⚡', '[Sk]'],
+  lastSkill:   ['⚡', '[Sk]'],
+  model:       ['🧠', '[M]'],
+  session:     ['⏱️', '[S]'],
+  thinking:    ['💭', '[Th]'],
+  permission:  ['🔒', '[Pm]'],
+  omcLabel:    ['🅾️', '[O]'],
+  rateLimits:  ['⏳', '[L]'],
+  tokens:      ['📝', '[Tk]'],
+  promptTime:  ['🕐', '[Pt]'],
+  callCounts:  ['🔧', '[Cc]'],
+  lastTool:    ['🔨', '[Lt]'],
+  hostname:    ['🖥️', '[H]'],
+  enterpriseCost: ['💰', '[Ec]'],
+};
+
+function iconPrefixFor(element: string, iconSet: string | undefined): string {
+  if (!iconSet || iconSet === 'none') return '';
+  const pair = ELEMENT_ICONS[element];
+  if (!pair) return '';
+  const [emoji, ascii] = pair;
+  return iconSet === 'emoji' ? `${emoji} ` : `${ascii} `;
+}
+
+// ── V2: Separator builder ─────────────────────────────────────────
+type SeparatorStyle = 'pipe' | 'dot' | 'space';
+const SEPARATOR_CHARS: Record<SeparatorStyle, string> = {
+  pipe:  ' | ',
+  dot:   ' · ',
+  space: '  ',
+};
+
+function buildSeparator(style: SeparatorStyle | undefined, theme?: import('./colors.js').ThemeColors): string {
+  const sep = SEPARATOR_CHARS[style ?? 'pipe'] ?? SEPARATOR_CHARS.pipe;
+  if (!theme) return `${APPLE_GRAY}${sep}${RESET}`;
+  return `${theme.muted}${sep}${RESET}`;
+}
+
 function buildMainElementOrder(elementOrder: string[] | undefined): string[] {
   if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
     return DEFAULT_ELEMENT_ORDER.main;
@@ -139,15 +188,19 @@ export function truncateLineToMaxWidth(line: string, maxWidth: number): string {
  * - no separator is present
  * - any single segment exceeds maxWidth
  */
-function wrapLineToMaxWidth(line: string, maxWidth: number): string[] {
+function wrapLineToMaxWidth(
+  line: string,
+  maxWidth: number,
+  separatorHint?: string,
+): string[] {
   if (maxWidth <= 0) return [""];
   if (stringWidth(line) <= maxWidth) return [line];
 
-  const separator = line.includes(DIM_SEPARATOR)
-    ? DIM_SEPARATOR
-    : line.includes(PLAIN_SEPARATOR)
-      ? PLAIN_SEPARATOR
-      : null;
+  // Try to detect the separator used in this line
+  const candidates: string[] = [];
+  if (separatorHint) candidates.push(separatorHint);
+  candidates.push(DIM_SEPARATOR, PLAIN_SEPARATOR, ' · ', '  ', ' | ');
+  const separator = candidates.find((s) => line.includes(s)) ?? null;
 
   if (!separator) {
     return [truncateLineToMaxWidth(line, maxWidth)];
@@ -195,11 +248,12 @@ function applyMaxWidthByMode(
   lines: string[],
   maxWidth: number | undefined,
   wrapMode: "truncate" | "wrap" | undefined,
+  separator?: string,
 ): string[] {
   if (!maxWidth || maxWidth <= 0) return lines;
 
   if (wrapMode === "wrap") {
-    return lines.flatMap((line) => wrapLineToMaxWidth(line, maxWidth));
+    return lines.flatMap((line) => wrapLineToMaxWidth(line, maxWidth, separator));
   }
 
   return lines.map((line) => truncateLineToMaxWidth(line, maxWidth));
@@ -547,6 +601,14 @@ export async function render(
     detail: safeArray(config.layout?.detail, DEFAULT_ELEMENT_ORDER.detail),
   };
 
+  // ── V2: Inject icon prefixes into rendered elements ──────────────
+  if (config.elements.iconSet && config.elements.iconSet !== 'none') {
+    for (const [name, value] of rendered) {
+      const prefix = iconPrefixFor(name, config.elements.iconSet);
+      if (prefix) rendered.set(name, prefix + value);
+    }
+  }
+
   /** Collect inline elements in layout order.
    *  Also picks up detail-origin elements moved to an inline group —
    *  their detail lines are joined into a single inline string. */
@@ -592,10 +654,15 @@ export async function render(
 
   // Compose output
   const outputLines: string[] = [];
+  const separator = buildSeparator(
+    config.separatorStyle,
+    context.theme,
+  );
+  const iconSet = config.elements.iconSet ?? 'none';
   const gitInfoLine =
-    gitElements.length > 0 ? gitElements.join(dim(PLAIN_SEPARATOR)) : null;
+    gitElements.length > 0 ? gitElements.join(separator) : null;
   const headerLine =
-    elements.length > 0 ? elements.join(dim(PLAIN_SEPARATOR)) : null;
+    elements.length > 0 ? elements.join(separator) : null;
 
   const gitPosition = config.elements.gitInfoPosition ?? "above";
 
@@ -619,6 +686,7 @@ export async function render(
     [...outputLines, ...detailLines],
     config.maxWidth,
     config.wrapMode,
+    separator,
   );
 
   // Apply max output line limit after wrapping so wrapped output still respects maxOutputLines.

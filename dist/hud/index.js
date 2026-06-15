@@ -15,6 +15,7 @@ import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { refreshMissionBoardState } from "./mission-board.js";
 import { sanitizeOutput } from "./sanitize.js";
+import { resolveThemeColors } from "./colors.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
 import { getRuntimePackageVersion } from "../lib/version.js";
 import { compareVersions } from "../features/auto-update.js";
@@ -391,6 +392,7 @@ async function main(watchMode = false, skipInit = false) {
             sessionSummary,
             lastToolName: transcriptData.lastToolName,
             payloadEstimate,
+            theme: resolveThemeColors(config.preset),
         };
         // Debug: log data if OMC_DEBUG is set
         if (process.env.OMC_DEBUG) {
@@ -422,7 +424,11 @@ async function main(watchMode = false, skipInit = false) {
             }
         }
         // Render and output
-        let output = await render(context, config);
+        // ── V2: Compact mode — shorten labels when context is high ─────
+        const effectiveConfig = config.elements.compactMode && context.contextPercent >= 80
+            ? { ...config, labels: { ...(config.labels ?? {}), ralph: 'r', context: 'c', thinking: 't', background: 'bg' } }
+            : config;
+        let output = await render(context, effectiveConfig);
         // Apply safe mode sanitization if enabled (Issue #346)
         // This strips ANSI codes and uses ASCII-only output to prevent
         // terminal rendering corruption during concurrent updates.
