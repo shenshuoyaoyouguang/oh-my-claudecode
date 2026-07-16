@@ -97,7 +97,7 @@ const { readStdin } = await import(
   pathToFileURL(join(__dirname, "lib", "stdin.mjs")).href
 );
 const { resolveOmcStateRoot } = await import(pathToFileURL(join(__dirname, "lib", "state-root.mjs")).href);
-const { advanceWorkflowOnStop, isValidWorkflowDescriptor, isValidWorkflowTrackingState, isWorkflowRuntimeSupported, refreshWorkflowBoundaryForCommit, resolveWorkflowStagePrompt } = await import(pathToFileURL(join(__dirname, "lib", "workflow-profile-runtime.mjs")).href);
+const { advanceWorkflowOnStop, isValidWorkflowDescriptor, isValidWorkflowTrackingState, isWorkflowRuntimeSupported, refreshWorkflowBoundaryForCommit, resolveWorkflowStagePrompt, takeWorkflowTranscriptFailure } = await import(pathToFileURL(join(__dirname, "lib", "workflow-profile-runtime.mjs")).href);
 const { acquireStateFileLockSync, atomicWriteFileSync, releaseStateFileLockSync, withStateFileLockSync } = await import(pathToFileURL(join(__dirname, "lib", "atomic-write.mjs")).href);
 
 function readJsonFile(path) {
@@ -507,14 +507,13 @@ function isWorkflowFileIdentity(value) {
     /^\d+$/.test(value.mtimeNs) && /^\d+$/.test(value.ctimeNs) && /^[a-f0-9]{64}$/.test(value.contentSha256);
 }
 
-const MAX_WORKFLOW_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
 
 function hasWorkflowBoundaryTopology(value, sessionId) {
   let root;
   try { root = realpathSync(resolve(getClaudeConfigDir(), "projects")); } catch { root = resolve(getClaudeConfigDir(), "projects"); }
   if (!hasExactWorkflowKeys(value, ["transcriptPath", "transcriptRoot", "transcriptBasename", "sessionId", "byteOffset", "fileIdentity"]) ||
     typeof value.transcriptPath !== "string" || value.transcriptRoot !== root || value.transcriptBasename !== `${sessionId}.jsonl` || value.sessionId !== sessionId ||
-    !Number.isSafeInteger(value.byteOffset) || value.byteOffset < 0 || value.byteOffset > MAX_WORKFLOW_TRANSCRIPT_BYTES || !isWorkflowFileIdentity(value.fileIdentity) ||
+    !Number.isSafeInteger(value.byteOffset) || value.byteOffset < 0 || !isWorkflowFileIdentity(value.fileIdentity) ||
     value.fileIdentity.size !== value.byteOffset) return false;
   if (resolve(value.transcriptPath) !== value.transcriptPath || !value.transcriptPath.startsWith(root + sep)) return false;
   const relativePath = value.transcriptPath.slice(root.length + sep.length);
@@ -549,7 +548,7 @@ function isStructurallyValidNamedWorkflowState(state, sessionId) {
   let previous;
   for (let index = 0; index < tracking.completionObservations.length; index += 1) {
     const observation = tracking.completionObservations[index];
-    if (!hasExactWorkflowKeys(observation, ["stageId", "sessionId", "signalId", "lineNumber", "byteOffset", "recordContentSha256", "stableFile", "activationBoundary", "observedAt"]) || observation.stageId !== workflow.stages[index] || observation.sessionId !== sessionId || observation.signalId !== `PIPELINE_${observation.stageId.toUpperCase()}_COMPLETE` || !Number.isSafeInteger(observation.lineNumber) || observation.lineNumber < 0 || !Number.isSafeInteger(observation.byteOffset) || !/^[a-f0-9]{64}$/.test(observation.recordContentSha256) || !isWorkflowTimestamp(observation.observedAt) || !isWorkflowFileIdentity(observation.stableFile) || observation.stableFile.size > MAX_WORKFLOW_TRANSCRIPT_BYTES || !hasWorkflowBoundaryTopology(observation.activationBoundary, sessionId) || observation.byteOffset < observation.activationBoundary.byteOffset || observation.byteOffset >= observation.stableFile.size || (previous && (observation.activationBoundary.transcriptPath !== previous.activationBoundary.transcriptPath || observation.activationBoundary.byteOffset !== previous.stableFile.size || !workflowFileIdentityEquals(observation.activationBoundary.fileIdentity, previous.stableFile)))) return false;
+    if (!hasExactWorkflowKeys(observation, ["stageId", "sessionId", "signalId", "lineNumber", "byteOffset", "recordContentSha256", "stableFile", "activationBoundary", "observedAt"]) || observation.stageId !== workflow.stages[index] || observation.sessionId !== sessionId || observation.signalId !== `PIPELINE_${observation.stageId.toUpperCase()}_COMPLETE` || !Number.isSafeInteger(observation.lineNumber) || observation.lineNumber < 0 || !Number.isSafeInteger(observation.byteOffset) || !/^[a-f0-9]{64}$/.test(observation.recordContentSha256) || !isWorkflowTimestamp(observation.observedAt) || !isWorkflowFileIdentity(observation.stableFile) || !hasWorkflowBoundaryTopology(observation.activationBoundary, sessionId) || observation.byteOffset < observation.activationBoundary.byteOffset || observation.byteOffset >= observation.stableFile.size || (previous && (observation.activationBoundary.transcriptPath !== previous.activationBoundary.transcriptPath || observation.activationBoundary.byteOffset !== previous.stableFile.size || !workflowFileIdentityEquals(observation.activationBoundary.fileIdentity, previous.stableFile)))) return false;
     previous = observation;
   }
   const latest = tracking.completionObservations.at(-1);
@@ -1094,7 +1093,11 @@ async function main() {
       ? autopilot.state
       : null;
     if (currentAutopilot && hasNamedWorkflowMarkers(currentAutopilot) && !isValidNamedWorkflowState(currentAutopilot, sessionId)) {
-      console.log(JSON.stringify({ continue: false, decision: "block", reason: "[AUTOPILOT WORKFLOW] workflow_descriptor_integrity_failed. Run /cancel and re-invoke the workflow." }));
+      const transcriptFailure = takeWorkflowTranscriptFailure(sessionId);
+      const reason = transcriptFailure === "workflow_transcript_record_too_large"
+        ? `[AUTOPILOT WORKFLOW] ${transcriptFailure}. Run /cancel and re-invoke the workflow.`
+        : "[AUTOPILOT WORKFLOW] workflow_descriptor_integrity_failed. Run /cancel and re-invoke the workflow.";
+      console.log(JSON.stringify({ continue: false, decision: "block", reason }));
       return;
     }
     if (currentAutopilot && hasNamedWorkflowMarkers(currentAutopilot) && !isWorkflowRuntimeSupported()) {
@@ -1181,7 +1184,8 @@ async function main() {
         : !autopilot.state.session_id || autopilot.state.session_id === sessionId;
       if (sessionMatches) {
         if (hasNamedWorkflowMarkers(autopilot.state) && !isValidNamedWorkflowState(autopilot.state, sessionId)) {
-          console.log(JSON.stringify({ continue: false, decision: "block", reason: "[AUTOPILOT WORKFLOW] workflow_descriptor_integrity_failed. Run /cancel and re-invoke the workflow." }));
+          const transcriptFailure = takeWorkflowTranscriptFailure(sessionId);
+          console.log(JSON.stringify({ continue: false, decision: "block", reason: transcriptFailure === 'workflow_transcript_record_too_large' ? '[AUTOPILOT WORKFLOW] workflow_transcript_record_too_large. Run /cancel and re-invoke the workflow.' : "[AUTOPILOT WORKFLOW] workflow_descriptor_integrity_failed. Run /cancel and re-invoke the workflow." }));
           return;
         }
         if (hasNamedWorkflowMarkers(autopilot.state) && !isWorkflowRuntimeSupported()) {
@@ -1195,11 +1199,17 @@ async function main() {
             console.log(JSON.stringify({ continue: false, decision: "block", reason: workflowAdvance.nextStage
               ? workflowAdvance.nextStagePrompt
               : "[AUTOPILOT WORKFLOW] All selected stages are complete." }));
+          } else if (takeWorkflowTranscriptFailure(sessionId) === 'workflow_transcript_record_too_large') {
+            console.log(JSON.stringify({ continue: false, decision: 'block', reason: '[AUTOPILOT WORKFLOW] workflow_transcript_record_too_large. Run /cancel and re-invoke the workflow.' }));
           } else if (hasNamedWorkflowMarkers(commit.state) && (!isValidWorkflowDescriptor(commit.state.workflow) || !isValidWorkflowTrackingState(commit.state, sessionId))) {
             console.log(JSON.stringify({ continue: false, decision: "block", reason: "[AUTOPILOT WORKFLOW] workflow_descriptor_integrity_failed. Run /cancel and re-invoke the workflow." }));
           } else {
             console.log(JSON.stringify(hasNamedWorkflowMarkers(commit.state) ? workflowStopResponse(commit.state) : SAFE_CONTINUE));
           }
+          return;
+        }
+        if (takeWorkflowTranscriptFailure(sessionId) === 'workflow_transcript_record_too_large') {
+          console.log(JSON.stringify({ continue: false, decision: 'block', reason: '[AUTOPILOT WORKFLOW] workflow_transcript_record_too_large. Run /cancel and re-invoke the workflow.' }));
           return;
         }
         if (hasNamedWorkflowMarkers(autopilot.state) && (!isValidWorkflowDescriptor(autopilot.state.workflow) || !isValidWorkflowTrackingState(autopilot.state, sessionId))) {

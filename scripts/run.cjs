@@ -8,17 +8,13 @@
  * runner retains ownership of their synchronous timeout boundary.
  */
 
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const { existsSync, readFileSync, realpathSync } = require('fs');
 const path = require('path');
 const { join, basename, dirname } = path;
 const { pathToFileURL } = require('url');
 const { Worker } = require('worker_threads');
 
-const target = process.argv[2];
-if (!target) {
-  process.exit(0);
-}
 
 function isPluginRoot(pluginRoot) {
   return existsSync(join(pluginRoot, 'hooks', 'hooks.json')) &&
@@ -118,10 +114,17 @@ function resolveTimeoutCushionMs(manifestTimeoutMs, hookEvent) {
 }
 
 const TIMEOUT_CUSHION_MS = 500;
+// = max declared manifest budget (60000ms, setup-maintenance) minus the 500ms cushion; applied ONLY when manifest resolution is null so long legit hooks are not prematurely reaped.
+const DEFAULT_GENERIC_TIMEOUT_MS = 59500;
+
 
 function resolveInnerTimeoutMs(manifestHook) {
   if (!manifestHook) return null;
   return Math.max(1, manifestHook.timeoutMs - resolveTimeoutCushionMs(manifestHook.timeoutMs, manifestHook.event));
+}
+
+function resolveGenericTimeoutMs(manifestHook) {
+  return manifestHook ? resolveInnerTimeoutMs(manifestHook) : DEFAULT_GENERIC_TIMEOUT_MS;
 }
 
 function resolveHookTimeoutMsFromRoot(pluginRoot, targetPath, extraArgs) {
@@ -195,6 +198,102 @@ function writeTimeoutDiagnostic(targetPath, manifestHook, timeoutMs) {
   if (manifestHook?.event !== 'UserPromptSubmit' || isDebugHooksEnabled()) {
     process.stderr.write(message);
   }
+}
+
+function reapTree(child) {
+  if (process.platform === 'win32') {
+    // Fire-and-forget: a slow, denied, or missing taskkill must not block the
+    // runner past the outer hooks.json budget. The runner still exits fail-open
+    // via child.unref() on the timeout path; taskkill reaps the tree best-effort.
+    try {
+      const killer = spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], {
+        windowsHide: true,
+        detached: true,
+        stdio: 'ignore',
+      });
+      killer.on('error', () => {});
+      killer.unref();
+    } catch {
+      // best-effort; child.unref() still guarantees the runner exits
+    }
+    return;
+  }
+
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    try {
+      process.kill(child.pid, 'SIGKILL');
+    } catch {
+      // best-effort; child.unref() still guarantees the runner exits
+    }
+  }
+}
+
+const RUNNER_TERMINATION_SIGNALS = ['SIGTERM', 'SIGINT', 'SIGHUP'];
+
+function runGenericChild(targetPath, extraArgs, timeoutMs, manifestHook) {
+  return new Promise(resolve => {
+    let terminal = false;
+    let timer;
+    const child = spawn(process.execPath, [targetPath, ...extraArgs], {
+      stdio: 'inherit',
+      env: process.env,
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+    });
+
+    // The generic child is detached into its own process group (POSIX). If the
+    // runner is terminated or cancelled BEFORE the inner timer fires (outer
+    // hooks.json timeout, Ctrl-C, parent kill), reap the tree so the detached
+    // hook cannot be orphaned — the exact failure class #3493 must not leave open.
+    const detachHandlers = () => {
+      clearTimeout(timer);
+      for (const signal of RUNNER_TERMINATION_SIGNALS) process.off(signal, onRunnerSignal);
+      process.off('exit', onRunnerExit);
+    };
+    function onRunnerSignal() {
+      if (terminal) return;
+      terminal = true;
+      detachHandlers();
+      reapTree(child);
+      process.exit(0);
+    }
+    function onRunnerExit() {
+      if (terminal) return;
+      terminal = true;
+      reapTree(child);
+    }
+
+    timer = setTimeout(() => {
+      if (terminal) return;
+      terminal = true;
+      detachHandlers();
+      reapTree(child);
+      // The runner MUST exit fail-open even if the tree reap did not (or could
+      // not) complete — the core #3493 symptom is run.cjs parents living for
+      // tens of minutes. unref() releases the child handle from the event loop.
+      try { child.unref(); } catch { /* handle already released */ }
+      writeTimeoutDiagnostic(targetPath, manifestHook, timeoutMs);
+      resolve(0);
+    }, timeoutMs);
+
+    child.once('exit', (code) => {
+      if (terminal) return;
+      terminal = true;
+      detachHandlers();
+      resolve(typeof code === 'number' ? code : 0);
+    });
+    child.once('error', () => {
+      if (terminal) return;
+      terminal = true;
+      detachHandlers();
+      resolve(0);
+    });
+
+    for (const signal of RUNNER_TERMINATION_SIGNALS) process.on(signal, onRunnerSignal);
+    process.on('exit', onRunnerExit);
+  });
 }
 
 async function runWorker(targetPath, manifestHook, timeoutMs) {
@@ -281,38 +380,38 @@ async function runWorker(targetPath, manifestHook, timeoutMs) {
   }
 }
 
-const resolution = resolveTarget(target);
-if (!resolution) {
-  process.exitCode = 0;
-} else {
-  const extraArgs = process.argv.slice(3);
-  const workerManifestHook = resolveWorkerTarget(resolution, extraArgs);
-  if (workerManifestHook) {
-    const workerTimeoutMs = resolveInnerTimeoutMs(workerManifestHook);
-    runWorker(resolution.targetPath, workerManifestHook, workerTimeoutMs).then(status => {
-      process.exitCode = status;
-    });
+if (require.main === module) {
+  const target = process.argv[2];
+  if (!target) {
+    process.exit(0);
+  }
+
+  const resolution = resolveTarget(target);
+  if (!resolution) {
+    process.exitCode = 0;
   } else {
-    const manifestHook = resolveHookTimeoutMs(resolution.targetPath, extraArgs);
-    const timeoutMs = resolveInnerTimeoutMs(manifestHook);
-    const result = spawnSync(
-      process.execPath,
-      [resolution.targetPath, ...extraArgs],
-      {
-        stdio: 'inherit',
-        env: process.env,
-        windowsHide: true,
-        ...(timeoutMs ? {
-          timeout: timeoutMs,
-          killSignal: process.platform === 'win32' ? 'SIGTERM' : 'SIGKILL',
-        } : {}),
-      }
-    );
-
-    if (result.error?.code === 'ETIMEDOUT' && timeoutMs) {
-      writeTimeoutDiagnostic(resolution.targetPath, manifestHook, timeoutMs);
+    const extraArgs = process.argv.slice(3);
+    const workerManifestHook = resolveWorkerTarget(resolution, extraArgs);
+    if (workerManifestHook) {
+      const workerTimeoutMs = resolveInnerTimeoutMs(workerManifestHook);
+      runWorker(resolution.targetPath, workerManifestHook, workerTimeoutMs).then(status => {
+        process.exitCode = status;
+      });
+    } else {
+      const manifestHook = resolveHookTimeoutMs(resolution.targetPath, extraArgs);
+      const timeoutMs = resolveGenericTimeoutMs(manifestHook);
+      runGenericChild(resolution.targetPath, extraArgs, timeoutMs, manifestHook).then(status => {
+        process.exitCode = status;
+      });
     }
-
-    process.exitCode = result.status ?? 0;
   }
 }
+
+module.exports = {
+  resolveInnerTimeoutMs,
+  resolveWorkerTarget,
+  resolveHookTimeoutMs,
+  resolveGenericTimeoutMs,
+  runGenericChild,
+  DEFAULT_GENERIC_TIMEOUT_MS,
+};

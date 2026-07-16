@@ -42,6 +42,8 @@ import {
   resolveAutopilotPlanPath,
   resolveOpenQuestionsPlanPath,
 } from "../../config/plan-output.js";
+import { validateNamedWorkflowStateStructure } from "./named-workflow-resume-validator.js";
+
 
 // ============================================================================
 // CONFIGURATION
@@ -288,6 +290,12 @@ export function getActiveAdapters(
   return ALL_ADAPTERS.filter((adapter) => !adapter.shouldSkip(config));
 }
 
+function hasNamedWorkflowMarkers(state: AutopilotState): boolean {
+  return ["workflow", "workflowRunId", "pipelineTracking"].some((marker) =>
+    Object.prototype.hasOwnProperty.call(state, marker),
+  );
+}
+
 /**
  * Read pipeline tracking from an autopilot state.
  * Returns null if the state doesn't have pipeline tracking.
@@ -309,11 +317,8 @@ export function writePipelineTracking(
   const state = readAutopilotState(directory, sessionId);
   if (!state) return false;
 
-  if (state.workflow) {
-    state.pipelineTracking = tracking;
-  } else {
-    state.pipeline = tracking;
-  }
+if (hasNamedWorkflowMarkers(state)) return false;
+  state.pipeline = tracking;
   return writeAutopilotState(directory, state, sessionId);
 }
 
@@ -432,6 +437,10 @@ export function advanceStage(
 ): { adapter: PipelineStageAdapter | null; phase: PipelinePhase } {
   const state = readAutopilotState(directory, sessionId);
   if (!state) return { adapter: null, phase: "failed" };
+
+  if (hasNamedWorkflowMarkers(state)) {
+    return { adapter: null, phase: "failed" };
+  }
 
   const tracking = readPipelineTracking(state);
   if (!tracking) return { adapter: null, phase: "failed" };
@@ -582,8 +591,10 @@ export function generatePipelinePrompt(
 ): string | null {
   const state = readAutopilotState(directory, sessionId);
   if (!state) return null;
-
-  const tracking = readPipelineTracking(state);
+  const namedWorkflow = hasNamedWorkflowMarkers(state);
+  const tracking = namedWorkflow
+    ? validateNamedWorkflowStateStructure(state, sessionId)?.tracking ?? null
+    : readPipelineTracking(state);
   if (!tracking) return null;
 
   const adapter = getCurrentStageAdapter(tracking);
@@ -722,7 +733,7 @@ function buildContext(
   state: AutopilotState,
   tracking: PipelineTracking,
 ): PipelineContext {
-  const namedWorkflow = Boolean(state.workflow);
+const namedWorkflow = hasNamedWorkflowMarkers(state);
   return {
     idea: namedWorkflow
       ? state.prompt || ""
