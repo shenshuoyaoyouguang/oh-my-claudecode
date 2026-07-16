@@ -308,9 +308,16 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       staleTaskThresholdMinutes: config.staleTaskThresholdMinutes,
     });
 
-    const currentSessionId = extractSessionIdFromPath(
-      resolvedTranscriptPath ?? stdin.transcript_path ?? "",
-    );
+    // Extract session ID from transcript path first, then fall back to
+    // CLAUDE_SESSION_ID env var. This ensures HUD state reads are always
+    // session-scoped and never accidentally cross-pollinate (Issue #3487).
+    const currentSessionId =
+      extractSessionIdFromPath(
+        resolvedTranscriptPath ?? stdin.transcript_path ?? "",
+      ) ||
+      process.env.CLAUDE_SESSION_ID?.trim() ||
+      process.env.CLAUDECODE_SESSION_ID?.trim() ||
+      null;
 
     // Initialize HUD state (cleanup stale/orphaned tasks)
     // Must happen after cwd resolution so cleanup targets the correct project directory
@@ -550,14 +557,12 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
     // Apply safe mode sanitization if enabled (Issue #346)
     // This strips ANSI codes and uses ASCII-only output to prevent
     // terminal rendering corruption during concurrent updates.
-    // On Windows, default to safe mode unless the user explicitly sets safeMode: false
-    // (e.g. Windows Terminal and modern terminals support ANSI natively).
-    // The win32 fallback is retained for configs that omit safeMode entirely
-    // (before default merge, e.g. minimal config files or future schema changes).
-    // explicit false overrides platform detection: process.platform === 'win32'
-    const useSafeMode =
-      config.elements.safeMode !== false &&
-      (config.elements.safeMode || process.platform === "win32");
+    // On Windows, safe mode is no longer forced by default since modern
+    // terminals (Windows Terminal, VS Code terminal) support ANSI and
+    // Unicode natively. The old win32-force disabled visual progress bars
+    // (█/░ became #/-) on perfectly capable terminals (Issue #3487 fix).
+    // Users on legacy conhost can still set safeMode: true explicitly.
+    const useSafeMode = config.elements.safeMode === true;
 
     if (useSafeMode) {
       output = sanitizeOutput(output);

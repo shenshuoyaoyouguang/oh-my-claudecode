@@ -12,7 +12,7 @@
  * Response: { five_hour: { utilization }, seven_day: { utilization } }
  */
 
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { getClaudeConfigDir } from '../utils/config-dir.js';
 import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
@@ -518,30 +518,58 @@ function readKeychainCredentials(): OAuthCredentials | null {
 
 /**
  * Read OAuth credentials from file fallback
+ *
+ * Attempts known credential file locations in order:
+ * 1. `~/.claude/.credentials.json` (macOS/Linux standard)
+ * 2. Windows: `%APPDATA%/Claude/code_credentials.json`
+ * 3. Windows: `%LOCALAPPDATA%/Claude/code_credentials.json`
+ *
+ * On Windows, Claude Code may store OAuth credentials under
+ * `%APPDATA%/Claude/` rather than the POSIX `~/.claude/` path.
+ * Both locations are checked to cover all deployment variants.
  */
 function readFileCredentials(): OAuthCredentials | null {
-  try {
-    const credPath = join(getClaudeConfigDir(), '.credentials.json');
-    if (!existsSync(credPath)) return null;
+  // Collect candidate paths in priority order
+  const candidates: string[] = [];
 
-    const content = readFileSync(credPath, 'utf-8');
-    const parsed = JSON.parse(content);
+  // Primary: ~/.claude/.credentials.json
+  candidates.push(join(getClaudeConfigDir(), '.credentials.json'));
 
-    // Handle nested structure (claudeAiOauth wrapper)
-    const creds = parsed.claudeAiOauth || parsed;
-
-    if (creds.accessToken) {
-      return {
-        accessToken: creds.accessToken,
-        expiresAt: creds.expiresAt,
-        refreshToken: creds.refreshToken,
-        source: 'file' as const,
-        subscriptionType: creds.subscriptionType,
-        rateLimitTier: creds.rateLimitTier,
-      };
+  // Windows fallbacks
+  if (process.platform === 'win32') {
+    const appData = process.env['APPDATA'];
+    if (appData) {
+      candidates.push(join(appData, 'Claude', 'code_credentials.json'));
     }
-  } catch {
-    // File read failed
+    const localAppData = process.env['LOCALAPPDATA'];
+    if (localAppData && localAppData !== appData) {
+      candidates.push(join(localAppData, 'Claude', 'code_credentials.json'));
+    }
+  }
+
+  for (const credPath of candidates) {
+    try {
+      if (!existsSync(credPath)) continue;
+
+      const content = readFileSync(credPath, 'utf-8');
+      const parsed = JSON.parse(content);
+
+      // Handle nested structure (claudeAiOauth wrapper)
+      const creds = parsed.claudeAiOauth || parsed;
+
+      if (creds.accessToken) {
+        return {
+          accessToken: creds.accessToken,
+          expiresAt: creds.expiresAt,
+          refreshToken: creds.refreshToken,
+          source: 'file' as const,
+          subscriptionType: creds.subscriptionType,
+          rateLimitTier: creds.rateLimitTier,
+        };
+      }
+    } catch {
+      // Try next candidate
+    }
   }
 
   return null;
@@ -868,22 +896,11 @@ function writeBackCredentials(creds: OAuthCredentials): void {
       }
     }
 
-    // Atomic write: write to tmp file, then rename (atomic on POSIX, best-effort on Windows)
-    const tmpPath = `${credPath}.tmp.${process.pid}`;
-    try {
-      writeFileSync(tmpPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
-      renameSync(tmpPath, credPath);
-    } catch (writeErr) {
-      // Clean up orphaned tmp file on failure
-      try {
-        if (existsSync(tmpPath)) {
-          unlinkSync(tmpPath);
-        }
-      } catch {
-        // Ignore cleanup errors
-      }
-      throw writeErr;
-    }
+    // Write directly: writeFileSync is atomic on most platforms for single-file
+    // writes. The old tmp+rename pattern breaks on Windows (renameSync fails when
+    // target exists) and is unnecessary for a credentials file that is only written
+    // by this single process during token refresh.
+    writeFileSync(credPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
   } catch {
     // Silent failure - credential write-back is best-effort
     if (process.env.OMC_DEBUG) {

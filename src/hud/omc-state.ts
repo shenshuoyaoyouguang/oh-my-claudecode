@@ -6,7 +6,7 @@
  */
 
 
-import { existsSync, readFileSync, statSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { getOmcRoot } from '../lib/worktree-paths.js';
 import type {
@@ -38,78 +38,40 @@ function isStateFileStale(filePath: string): boolean {
 }
 
 /**
- * Resolve state file path with fallback chain:
- * 1. Session-scoped paths (.omc/state/sessions/{id}/{filename}) - newest first
+ * Resolve state file path with rigid lookup chain:
+ * 1. Session-scoped path (.omc/state/sessions/{id}/{filename}) — when sessionId is provided
  * 2. Standard path (.omc/state/{filename})
  * 3. Legacy path (.omc/{filename})
  *
- * Returns the most recently modified matching path, or null if none found.
- * This ensures the HUD displays state from any active session (Issue #456).
+ * CRITICAL: When sessionId is provided, ONLY the session-scoped path is checked.
+ * No mtime-based scanning across sessions — that caused cross-session state pollution
+ * (Issue #3487 fix). Each session owns its state files; HUD must never read another
+ * session's state.
  */
 function resolveStatePath(directory: string, filename: string, sessionId?: string): string | null {
   const omcRoot = getOmcRoot(directory);
 
+  // When a specific session is identified, ONLY read its session-scoped file.
+  // No fallback chain — we must not accidentally read another session's state.
   if (sessionId) {
     const sessionPath = join(omcRoot, 'state', 'sessions', sessionId, filename);
     return existsSync(sessionPath) ? sessionPath : null;
   }
 
-  let bestPath: string | null = null;
-  let bestMtime = 0;
+  // No session context available — try the shared project-level paths.
+  // This preserves backward compatibility for --watch mode / detached processes
+  // that lack CLAUDE_SESSION_ID. These are inherently ambiguous; we accept the
+  // risk of reading stale state rather than corrupting another session's data.
 
-  // Check session-scoped paths first (most likely location after Issue #456 fix)
-  const sessionsDir = join(omcRoot, 'state', 'sessions');
-  if (existsSync(sessionsDir)) {
-    try {
-      const entries = readdirSync(sessionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const sessionFile = join(sessionsDir, entry.name, filename);
-        if (existsSync(sessionFile)) {
-          try {
-            const mtime = statSync(sessionFile).mtimeMs;
-            if (mtime > bestMtime) {
-              bestMtime = mtime;
-              bestPath = sessionFile;
-            }
-          } catch {
-            // Skip on stat error
-          }
-        }
-      }
-    } catch {
-      // Ignore readdir errors
-    }
-  }
-
-  // Check standard path
+  // Check standard path (.omc/state/{filename})
   const newPath = join(omcRoot, 'state', filename);
-  if (existsSync(newPath)) {
-    try {
-      const mtime = statSync(newPath).mtimeMs;
-      if (mtime > bestMtime) {
-        bestMtime = mtime;
-        bestPath = newPath;
-      }
-    } catch {
-      if (!bestPath) bestPath = newPath;
-    }
-  }
+  if (existsSync(newPath)) return newPath;
 
-  // Check legacy path
+  // Check legacy path (.omc/{filename})
   const legacyPath = join(omcRoot, filename);
-  if (existsSync(legacyPath)) {
-    try {
-      const mtime = statSync(legacyPath).mtimeMs;
-      if (mtime > bestMtime) {
-        bestPath = legacyPath;
-      }
-    } catch {
-      if (!bestPath) bestPath = legacyPath;
-    }
-  }
+  if (existsSync(legacyPath)) return legacyPath;
 
-  return bestPath;
+  return null;
 }
 
 // ============================================================================

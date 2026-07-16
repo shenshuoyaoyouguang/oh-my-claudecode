@@ -78,25 +78,28 @@ describe('stripAnsi', () => {
 });
 
 describe('replaceUnicodeBlocks', () => {
-  it('should replace filled block with hash', () => {
-    expect(replaceUnicodeBlocks('████')).toBe('####');
+  it('should preserve Unicode blocks (now a deliberate no-op)', () => {
+    // As of Issue #3487 fix, replaceUnicodeBlocks is a no-op.
+    // Modern terminals handle block characters at correct width,
+    // and the ASCII replacement destroyed visual gradient in progress bars.
+    expect(replaceUnicodeBlocks('████')).toBe('████');
   });
 
-  it('should replace empty block with dash', () => {
-    expect(replaceUnicodeBlocks('░░░░')).toBe('----');
+  it('should preserve empty blocks', () => {
+    expect(replaceUnicodeBlocks('░░░░')).toBe('░░░░');
   });
 
-  it('should replace mixed blocks', () => {
-    expect(replaceUnicodeBlocks('██░░')).toBe('##--');
+  it('should preserve mixed blocks', () => {
+    expect(replaceUnicodeBlocks('██░░')).toBe('██░░');
   });
 
-  it('should replace shaded blocks', () => {
-    expect(replaceUnicodeBlocks('▓▒')).toBe('=-');
+  it('should preserve shaded blocks', () => {
+    expect(replaceUnicodeBlocks('▓▒')).toBe('▓▒');
   });
 
-  it('should handle progress bar pattern', () => {
+  it('should handle progress bar pattern (pass-through)', () => {
     const progressBar = '████░░░░░░';
-    expect(replaceUnicodeBlocks(progressBar)).toBe('####------');
+    expect(replaceUnicodeBlocks(progressBar)).toBe('████░░░░░░');
   });
 
   it('should handle text without unicode blocks', () => {
@@ -106,9 +109,9 @@ describe('replaceUnicodeBlocks', () => {
 });
 
 describe('sanitizeOutput', () => {
-  it('should PRESERVE colors and replace blocks in single line', () => {
+  it('should PRESERVE colors and PRESERVE Unicode blocks (no longer replaced)', () => {
     const input = '\x1b[32m████░░░░░░\x1b[0m 40%';
-    expect(sanitizeOutput(input)).toBe('\x1b[32m####------\x1b[0m 40%');
+    expect(sanitizeOutput(input)).toBe('\x1b[32m████░░░░░░\x1b[0m 40%');
   });
 
   it('should PRESERVE multi-line output with newlines', () => {
@@ -116,9 +119,9 @@ describe('sanitizeOutput', () => {
     expect(sanitizeOutput(input)).toBe('Line 1\nLine 2\nLine 3');
   });
 
-  it('should handle complex HUD output preserving colors', () => {
+  it('should handle complex HUD output preserving colors and blocks', () => {
     const input = '\x1b[1m[OMC]\x1b[0m | \x1b[32m████░░░░░░\x1b[0m 40% | agents:3';
-    expect(sanitizeOutput(input)).toBe('\x1b[1m[OMC]\x1b[0m | \x1b[32m####------\x1b[0m 40% | agents:3');
+    expect(sanitizeOutput(input)).toBe('\x1b[1m[OMC]\x1b[0m | \x1b[32m████░░░░░░\x1b[0m 40% | agents:3');
   });
 
   it('should preserve lines and trim trailing whitespace', () => {
@@ -138,9 +141,9 @@ describe('sanitizeOutput', () => {
 
     const result = sanitizeOutput(input);
 
-    // Should preserve multi-line structure with ASCII blocks and colors
-    expect(result).not.toContain('█');
-    expect(result).not.toContain('░');
+    // Should preserve multi-line structure with block characters and colors
+    expect(result).toContain('█');   // Block characters are preserved (no longer replaced)
+    expect(result).toContain('░');   // Block characters are preserved (no longer replaced)
     expect(result).toContain('\n'); // PRESERVE newlines for tree structure
     expect(result).toContain('[OMC]');
     expect(result).toContain('architect');

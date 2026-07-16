@@ -40,30 +40,44 @@ describe('hud omc state session scoping', () => {
     return dir;
   }
 
-  it('keeps backward-compatible newest-session fallback when sessionId is omitted', () => {
+  it('reads state from standard path when sessionId is omitted', () => {
     const worktree = createWorktree();
     const omcRoot = join(worktree, '.omc');
-    const older = Date.now() - 60_000;
-    const newer = Date.now();
 
-    writeJson(join(omcRoot, 'state', 'sessions', 'session-a', 'ralph-state.json'), {
-      active: true,
-      iteration: 1,
-      max_iterations: 5,
-      current_story_id: 'story-a',
-    }, older);
-    writeJson(join(omcRoot, 'state', 'sessions', 'session-b', 'ralph-state.json'), {
+    // Session-scoped files are NOT discovered by sessionId-less reads.
+    // The standard path (.omc/state/ralph-state.json) is used instead.
+    writeJson(join(omcRoot, 'state', 'ralph-state.json'), {
       active: true,
       iteration: 4,
       max_iterations: 7,
       current_story_id: 'story-b',
-    }, newer);
+    });
 
     expect(readRalphStateForHud(worktree)).toMatchObject({
       active: true,
       iteration: 4,
       maxIterations: 7,
       currentStoryId: 'story-b',
+    });
+  });
+
+  it('reads state from legacy path when no session-scoped or standard state exists', () => {
+    const worktree = createWorktree();
+    const omcRoot = join(worktree, '.omc');
+
+    // Legacy path (.omc/ralph-state.json) is the final fallback
+    writeJson(join(omcRoot, 'ralph-state.json'), {
+      active: true,
+      iteration: 2,
+      max_iterations: 5,
+      current_story_id: 'story-a',
+    });
+
+    expect(readRalphStateForHud(worktree)).toMatchObject({
+      active: true,
+      iteration: 2,
+      maxIterations: 5,
+      currentStoryId: 'story-a',
     });
   });
 
@@ -161,7 +175,7 @@ describe('hud omc state session scoping', () => {
       reinforcement_count: 7,
     });
 
-    expect(isAnyModeActive(worktree)).toBe(true);
+    expect(isAnyModeActive(worktree)).toBe(false); // No sessionId → no scanning across sessions
     expect(isAnyModeActive(worktree, 'session-a')).toBe(false);
     expect(isAnyModeActive(worktree, 'session-b')).toBe(true);
     expect(getActiveSkills(worktree, 'session-a')).toEqual([]);

@@ -54,13 +54,19 @@ export function stripAnsi(text: string): string {
  * Replace variable-width Unicode block characters with fixed-width ASCII equivalents.
  * Targets characters commonly used in progress bars that have inconsistent
  * terminal width across different terminal emulators.
+ *
+ * NOTE: As of Issue #3487 fix, this is intentionally a no-op.
+ * Modern terminals (Windows Terminal, iTerm2, Kitty, WezTerm, VS Code terminal)
+ * all handle Unicode block characters (█, ░, ▓, ▒) at the correct width.
+ * The ASCII replacement destroyed visual gradient in progress bars
+ * (ctx:[####------] instead of ctx:[████░░░░░░]) without fixing any real
+ * terminal corruption — the width calculation in string-width.ts already
+ * returns the correct value for these characters.
+ *
+ * Kept as a function for API stability; callers can safely use it as a passthrough.
  */
 export function replaceUnicodeBlocks(text: string): string {
-  return text
-    .replace(/█/g, '#')
-    .replace(/░/g, '-')
-    .replace(/▓/g, '=')
-    .replace(/▒/g, '-');
+  return text;
 }
 
 /**

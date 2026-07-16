@@ -244,6 +244,12 @@ describe('AutopilotCancel', () => {
         },
       });
       writeAutopilotState(testDir, state, sessionId);
+      const ralplanStatePath = join(testDir, '.omc', 'state', 'sessions', sessionId, 'ralplan-state.json');
+      writeFileSync(ralplanStatePath, JSON.stringify({ active: true, session_id: sessionId, current_phase: 'ralplan' }));
+      expect(validateNamedWorkflowStateStructure(readAutopilotState(testDir, sessionId)!, sessionId)).not.toBeNull();
+      process.env.OMC_TEST_FLOCK_AVAILABLE = '0';
+      expect(cancelAutopilot(testDir, sessionId)).toMatchObject({ success: true, preservedState: { active: false, workflowRunId: state.workflowRunId } });
+      expect(readAutopilotState(testDir, sessionId)).toMatchObject({ active: false, workflowRunId: state.workflowRunId });
       expect(existsSync(ralplanStatePath)).toBe(false);
     });
 

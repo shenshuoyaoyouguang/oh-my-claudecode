@@ -216,23 +216,27 @@ describe('Windows HUD Platform Fixes (#739)', () => {
   });
 
   // =========================================================================
-  // P2: Safe mode auto-enable on Windows
+  // P2: Safe mode no longer auto-enabled on Windows
   // =========================================================================
-  describe('P2: Safe mode auto-enable on Windows', () => {
-    it('index.ts should auto-enable safe mode on Windows', () => {
+  describe('P2: Safe mode — explicit opt-in only', () => {
+    it('index.ts no longer forces safe mode on Windows automatically', () => {
       const content = readFileSync(
         join(packageRoot, 'src', 'hud', 'index.ts'),
         'utf-8',
       );
-      expect(content).toContain("process.platform === 'win32'");
-      expect(content).toContain('config.elements.safeMode !== false');
+      // As of Issue #3487 fix, safe mode is only enabled when `safeMode: true`
+      // is explicitly set. Windows Terminal and modern terminals support ANSI
+      // and Unicode natively — the old win32-force disabled progress bars on
+      // perfectly capable terminals.
+      expect(content).toContain('config.elements.safeMode === true');
+      expect(content).not.toContain("process.platform === 'win32'");
     });
 
     it('safe mode logic: config=false on Mac -> disabled', () => {
       expect(getSafeMode(false, 'darwin')).toBe(false);
     });
 
-    it('safe mode logic: config=false on Windows -> disabled (explicit override)', () => {
+    it('safe mode logic: config=false on Windows -> disabled', () => {
       expect(getSafeMode(false, 'win32')).toBe(false);
     });
 

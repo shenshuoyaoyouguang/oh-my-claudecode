@@ -1678,11 +1678,11 @@ describe('writeBackCredentials — Keychain vs file refresh', () => {
     expect(result.error).toBeUndefined();
     expect(result.rateLimits?.fiveHourPercent).toBe(20);
 
-    // File should have been written with new tokens
+    // File should have been written with new tokens (direct write, no .tmp. pattern)
     const fileWriteCall = vi.mocked(fs.writeFileSync).mock.calls.find(
-      c => String(c[0]).endsWith('.credentials.json.tmp.' + process.pid)
+      c => String(c[0]).endsWith('.credentials.json')
     );
-    expect(fileWriteCall).toBeTruthy();
+    expect(fileWriteCall, 'writeFileSync should write directly to .credentials.json').toBeTruthy();
     const written = JSON.parse(String(fileWriteCall![1]));
     expect(written.claudeAiOauth.accessToken).toBe('new-file-access-token');
     expect(written.claudeAiOauth.refreshToken).toBe('new-file-refresh-token');
