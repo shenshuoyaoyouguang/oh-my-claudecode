@@ -48,6 +48,60 @@ import { renderMissionBoard } from "./mission-board.js";
 import { renderSessionSummary } from "./elements/session-summary.js";
 import { renderLastTool } from "./elements/last-tool.js";
 
+// ============================================================================
+// 元素注册表与递归深度守卫
+// ============================================================================
+
+/**
+ * HUD 元素最大递归深度。
+ * 防止 render 在面对环形引用或超深嵌套数据时无限递归(对应提交 66501ffd)。
+ */
+export const MAX_RECURSION_DEPTH = 100;
+
+/**
+ * 元素渲染模式:
+ * - inline: 渲染到主状态行(以分隔符连接)
+ * - detail: 渲染为独立详情行
+ */
+export type ElementRenderMode = 'inline' | 'detail';
+
+/**
+ * 元素所属布局组:
+ * - line1: git/信息行
+ * - main: 主状态行
+ * - detail: 独立详情行
+ */
+export type ElementLayoutGroup = 'line1' | 'main' | 'detail';
+
+/**
+ * 元素注册表项:携带每个元素的元数据(name、render mode、layout group)。
+ * render 函数主循环仍保留 if/else 分支以保持向后兼容,
+ * 此注册表作为元数据的集中来源,供外部工具与测试消费。
+ */
+export interface ElementRegistryEntry {
+  name: string;
+  mode: ElementRenderMode;
+  group: ElementLayoutGroup;
+}
+
+/**
+ * HUD 元素注册表:集中声明所有核心元素的元数据(对应提交 eacb0ae9)。
+ * 包含每个元素的渲染模式(inline/detail)与所属布局组。
+ * 测试与外部工具可通过此注册表查询元素元数据,无需扫描 render 源码。
+ */
+export const ELEMENT_REGISTRY: Record<string, ElementRegistryEntry> = {
+  omcLabel: { name: 'omcLabel', mode: 'inline', group: 'main' },
+  model: { name: 'model', mode: 'inline', group: 'main' },
+  rateLimits: { name: 'rateLimits', mode: 'inline', group: 'main' },
+  contextBar: { name: 'contextBar', mode: 'inline', group: 'main' },
+  agents: { name: 'agents', mode: 'inline', group: 'main' },
+  todos: { name: 'todos', mode: 'detail', group: 'detail' },
+  ralph: { name: 'ralph', mode: 'inline', group: 'main' },
+  autopilot: { name: 'autopilot', mode: 'inline', group: 'main' },
+  background: { name: 'background', mode: 'inline', group: 'main' },
+  callCounts: { name: 'callCounts', mode: 'inline', group: 'main' },
+};
+
 /**
  * ANSI escape sequence regex (matches SGR and other CSI sequences).
  * Used to skip escape codes when measuring/truncating visible width.

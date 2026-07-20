@@ -2,12 +2,22 @@
  * OMC HUD - Background Task Cleanup
  *
  * Handles cleanup of stale and orphaned background tasks on HUD startup.
+ *
+ * 注意:本模块不再静态 import state.ts,改为在每个清理函数内部动态 import,
+ * 以打破 background-cleanup.ts ↔ state.ts 的运行时 import 循环(依赖注入)。
  */
 
 import type { BackgroundTask } from './types.js';
-import { readHudState, writeHudState } from './state.js';
 
 const STALE_TASK_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes default
+
+/**
+ * 动态加载 state 模块,避免静态 import 形成循环依赖。
+ * 返回 readHudState / writeHudState 两个函数引用。
+ */
+async function loadStateModule(): Promise<typeof import('./state.js')> {
+  return await import('./state.js');
+}
 
 /**
  * Parse task start time safely, handling both `startedAt` and legacy `startTime` alias.
@@ -31,6 +41,7 @@ export async function cleanupStaleBackgroundTasks(
   directory?: string,
   sessionId?: string
 ): Promise<number> {
+  const { readHudState, writeHudState } = await loadStateModule();
   const state = readHudState(directory, sessionId);
 
   if (!state || !state.backgroundTasks) {
@@ -109,6 +120,7 @@ export async function detectOrphanedTasks(
   directory?: string,
   sessionId?: string,
 ): Promise<BackgroundTask[]> {
+  const { readHudState } = await loadStateModule();
   const state = readHudState(directory, sessionId);
 
   if (!state || !state.backgroundTasks) {
@@ -144,6 +156,7 @@ export async function markOrphanedTasksAsStale(
   directory?: string,
   sessionId?: string,
 ): Promise<number> {
+  const { readHudState, writeHudState } = await loadStateModule();
   const state = readHudState(directory, sessionId);
 
   if (!state || !state.backgroundTasks) {

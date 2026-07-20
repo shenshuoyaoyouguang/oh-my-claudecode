@@ -23,7 +23,9 @@ import {
   getRunningTasks,
   writeHudState,
   initializeHUDState,
+  getHudStateLockPath,
 } from "./state.js";
+import { withFileLockSync } from "../lib/file-lock.js";
 import {
   readRalphStateForHud,
   readUltraworkStateForHud,
@@ -342,6 +344,8 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
     const _backgroundTasks = hudState?.backgroundTasks || [];
 
     // Persist session start time to survive tail-parsing resets (#528)
+    // RMW (Read-Modify-Write) pattern: 通过 withFileLockSync 锁保护
+    // session-start 持久化,避免并发覆盖丢失 sessionStartTimestamp。
     // When tail parsing kicks in for large transcripts, sessionStart comes from
     // the first entry in the tail chunk rather than the actual session start.
     // We persist the real start time in HUD state on first observation.
@@ -357,14 +361,27 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       // If invalid, fall through to transcript-derived sessionStart
     } else if (sessionStart) {
       // First time seeing session start (or new session) - persist it
-      const stateToWrite = hudState || {
-        timestamp: new Date().toISOString(),
-        backgroundTasks: [],
-      };
-      stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
-      stateToWrite.sessionId = currentSessionId ?? undefined;
-      stateToWrite.timestamp = new Date().toISOString();
-      writeHudState(stateToWrite, cwd, currentSessionId ?? undefined);
+      // 在 withFileLock 锁内执行 RMW:重新读取最新 state、合并 sessionStartTimestamp、
+      // 写回,防止并发 lost update。锁文件在 finally 中自动释放。
+      // 捕获到局部 const 以便闭包内保持类型收窄(sessionStart 是外层 let)。
+      const sessionStartDate = sessionStart;
+      withFileLockSync(
+        getHudStateLockPath(cwd, currentSessionId ?? undefined),
+        () => {
+          const currentState = readHudState(cwd, currentSessionId ?? undefined);
+          const stateToWrite = currentState ?? {
+            timestamp: new Date().toISOString(),
+            backgroundTasks: [],
+          };
+          stateToWrite.sessionStartTimestamp = sessionStartDate.toISOString();
+          stateToWrite.sessionId = currentSessionId ?? undefined;
+          stateToWrite.timestamp = new Date().toISOString();
+          // 外层已持锁,内层 writeHudState 禁用锁以避免自死锁
+          writeHudState(stateToWrite, cwd, currentSessionId ?? undefined, {
+            lock: false,
+          });
+        },
+      );
     }
 
     // Merge Claude Code stdin generic buckets with API/cache-specific fields.

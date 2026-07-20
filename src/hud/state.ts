@@ -36,10 +36,10 @@ import {
   sanitizeHudLabels,
 } from "./types.js";
 import { DEFAULT_MISSION_BOARD_CONFIG } from "./mission-board.js";
-import {
-  cleanupStaleBackgroundTasks,
-  markOrphanedTasksAsStale,
-} from "./background-cleanup.js";
+import { withFileLockSync } from "../lib/file-lock.js";
+
+// background-cleanup.ts 不再静态导入,改在 initializeHUDState 内部动态 import,
+// 以打破 state.ts ↔ background-cleanup.ts 的运行时 import 循环(依赖注入)。
 
 // ============================================================================
 // Path Helpers
@@ -65,6 +65,14 @@ function getStateFilePath(directory?: string, sessionId?: string): string {
     return resolveSessionStatePath("hud", sessionId, baseDir);
   }
   return getLocalStateFilePath(baseDir);
+}
+
+/**
+ * 返回 HUD state 文件对应的锁文件路径(供外部 RMW 流程使用)。
+ * 锁文件位于 state 文件旁,命名为 `<stateFile>.lock`。
+ */
+export function getHudStateLockPath(directory?: string, sessionId?: string): string {
+  return `${getStateFilePath(directory, sessionId)}.lock`;
 }
 
 /**
@@ -257,42 +265,70 @@ export function readHudState(
 }
 
 /**
+ * writeHudState 的可选参数。
+ * 默认行为:使用文件锁保证写入原子性(防止并发 lost update)。
+ */
+export interface WriteHudStateOptions {
+  /**
+   * 是否使用文件锁串行化并发写入。
+   * 默认 true。设为 false 可在已知无并发场景下跳过锁开销。
+   */
+  lock?: boolean;
+}
+
+/**
  * Write HUD state to disk (local only)
+ *
+ * 默认通过 withFileLockSync 串行化并发写入,避免 lost update(对应提交 c1d4438d)。
+ * 锁文件在写入完成后自动释放(withFileLockSync 内部 try/finally 语义),
+ * 因此不会在写入完成后残留。
  */
 export function writeHudState(
   state: OmcHudState,
   directory?: string,
   sessionId?: string,
+  options?: WriteHudStateOptions,
 ): boolean {
   try {
     // Write to the session-scoped file when the current session is known,
     // otherwise keep the legacy local path for backwards compatibility.
     ensureHudStateDir(directory, sessionId);
     const stateFile = getStateFilePath(directory, sessionId);
-    const nextState = sessionId ? { ...state, sessionId } : state;
-    atomicWriteJsonSync(stateFile, nextState);
+    const lockPath = `${stateFile}.lock`;
+    const useLock = options?.lock !== false;
 
-    if (sessionId) {
-      const legacyCandidates = [
-        getLegacyRootStateFilePath(directory),
-      ];
-      for (const legacyFile of legacyCandidates) {
-        if (!existsSync(legacyFile)) {
-          continue;
-        }
-        try {
-          const content = readFileSync(legacyFile, "utf-8");
-          const legacyState = JSON.parse(content) as Partial<OmcHudState>;
-          if (!legacyState.sessionId || legacyState.sessionId === sessionId) {
-            unlinkSync(legacyFile);
+    // 写入与遗留文件清理逻辑,可在锁内执行以保证 RMW 原子性
+    const writeAndCleanup = (): boolean => {
+      const nextState = sessionId ? { ...state, sessionId } : state;
+      atomicWriteJsonSync(stateFile, nextState);
+
+      if (sessionId) {
+        const legacyCandidates = [
+          getLegacyRootStateFilePath(directory),
+        ];
+        for (const legacyFile of legacyCandidates) {
+          if (!existsSync(legacyFile)) {
+            continue;
           }
-        } catch {
-          // Best-effort ghost cleanup only.
+          try {
+            const content = readFileSync(legacyFile, "utf-8");
+            const legacyState = JSON.parse(content) as Partial<OmcHudState>;
+            if (!legacyState.sessionId || legacyState.sessionId === sessionId) {
+              unlinkSync(legacyFile);
+            }
+          } catch {
+            // Best-effort ghost cleanup only.
+          }
         }
       }
-    }
+      return true;
+    };
 
-    return true;
+    if (useLock) {
+      // withFileLockSync 在 finally 中自动释放锁,锁文件不会残留
+      return withFileLockSync(lockPath, writeAndCleanup);
+    }
+    return writeAndCleanup();
   } catch (error) {
     console.error(
       "[HUD] Failed to write state:",
@@ -521,11 +557,17 @@ export function applyPreset(preset: HudConfig["preset"]): HudConfig {
 /**
  * Initialize HUD state with cleanup of stale/orphaned tasks.
  * Should be called on HUD startup.
+ *
+ * background-cleanup.ts 通过动态 import 加载,避免与 state.ts 形成静态 import 循环。
  */
 export async function initializeHUDState(
   directory?: string,
   sessionId?: string,
 ): Promise<void> {
+  // 动态 import 打破 state.ts → background-cleanup.ts → state.ts 的循环依赖
+  const { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale } =
+    await import("./background-cleanup.js");
+
   // Clean up stale background tasks from previous sessions
   const removedStale = await cleanupStaleBackgroundTasks(undefined, directory, sessionId);
   const markedOrphaned = await markOrphanedTasksAsStale(directory, sessionId);
