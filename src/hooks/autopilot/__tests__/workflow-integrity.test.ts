@@ -112,7 +112,11 @@ describe("workflow descriptor integrity enforcement (#3487)", () => {
     expect(readFileSync(statePath)).toEqual(before);
   });
 
-  it("dispatches a valid named state without legacy mutation", async () => {
+  // Windows 不支持 flock,checkAutopilot 会走 unsupported 路径返回 shouldBlock:false
+  // 该测试的核心是验证 Linux 下 named workflow 能正常 dispatch,需在 Linux 下运行
+  it.skipIf(process.platform !== "linux")(
+    "dispatches a valid named state without legacy mutation",
+    async () => {
     const sessionId = "named-reader-session";
     const base = initAutopilot(testDir, "ship the release", sessionId)!;
     const descriptor = createWorkflowDescriptor("release-flow", {
@@ -318,7 +322,11 @@ describe("workflow descriptor integrity enforcement (#3487)", () => {
     });
   });
 
-  it("authenticates an exact named completion signal and advances without legacy state", async () => {
+  // Windows 不支持 flock,checkAutopilot 无法 advance named workflow
+  // 该测试核心是验证 Linux 下 completion signal 认证与 advance,需在 Linux 下运行
+  it.skipIf(process.platform !== "linux")(
+    "authenticates an exact named completion signal and advances without legacy state",
+    async () => {
     const sessionId = "named-advance-session";
     const base = initAutopilot(testDir, "ship the release", sessionId)!;
     const descriptor = createWorkflowDescriptor("release-flow", {

@@ -284,7 +284,8 @@ describe('AutopilotCancel', () => {
       expect(ultraqaLoop.clearUltraQAState).not.toHaveBeenCalled();
     });
 
-    it('does not clean linked state when the primary named mutation lock is held', () => {
+    // 测试依赖 /proc/{pid}/stat 读取进程启动时间,Linux 特定 API,Windows 不存在该路径
+    it.skipIf(process.platform !== 'linux')('does not clean linked state when the primary named mutation lock is held', () => {
       const sessionId = 'named-primary-lock';
       const state = initAutopilot(testDir, 'ship it', sessionId)!;
       state.workflow = createWorkflowDescriptor('release-flow', { version: 1, stages: ['ralplan', 'execution'] })!;
@@ -729,7 +730,9 @@ describe('AutopilotCancel', () => {
       expect(require('fs').readFileSync(stateFile)).toEqual(before);
     });
 
-    it('rejects a named traversal boundary without mutating paused bytes', () => {
+    // 测试使用 symlinkSync 模拟符号链接攻击,Windows 默认不允许非管理员创建符号链接
+    // 且 validateNamedWorkflowState 依赖 Linux 的 /proc/self/fd 进行 no-follow 校验
+    it.skipIf(process.platform !== 'linux')('rejects a named traversal boundary without mutating paused bytes', () => {
       const sessionId = 'resume-auth-session';
       const root = join(testDir, 'claude-config', 'projects');
       process.env.CLAUDE_CONFIG_DIR = join(testDir, 'claude-config');
@@ -780,7 +783,8 @@ describe('AutopilotCancel', () => {
       expect(finalResume.message).toBe('Resuming autopilot at phase: ralplan');
       expect(finalResume).toMatchObject({ success: true, state: { active: true, workflowRunId: state.workflowRunId } });
     });
-    it('rejects forged completion observations and resumes an authenticated advanced named workflow', () => {
+    // 测试依赖 validateNamedWorkflowState 的完整认证流程,该流程依赖 Linux 的 /proc/self/fd 与 no-follow 语义
+    it.skipIf(process.platform !== 'linux')('rejects forged completion observations and resumes an authenticated advanced named workflow', () => {
       const sessionId = 'resume-observation-session';
       const root = join(testDir, 'claude-config', 'projects');
       const project = join(root, '-workspace-project');
