@@ -14,26 +14,29 @@ const CACHE_PATH = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode/.usage-cache-z
 const CACHE_DIR = `${CLAUDE_CONFIG_DIR}/plugins/oh-my-claudecode`;
 
 function createFsMock(initialFiles: Record<string, string>) {
+  // 路径规范化：源码用 path.join 构造路径，Windows 上产出反斜杠，
+  // 但测试预置的 fs Map key 使用正斜杠。统一替换以避免查找失败。
+  const normalizePath = (p: unknown) => String(p).replace(/\\/g, '/');
   const files = new Map(Object.entries(initialFiles));
   const directories = new Set<string>([CLAUDE_CONFIG_DIR, CACHE_DIR]);
 
-  const existsSync = vi.fn((path: string) => files.has(String(path)) || directories.has(String(path)));
+  const existsSync = vi.fn((path: string) => files.has(normalizePath(path)) || directories.has(normalizePath(path)));
   const readFileSync = vi.fn((path: string) => {
-    const content = files.get(String(path));
+    const content = files.get(normalizePath(path));
     if (content == null) throw new Error(`ENOENT: ${path}`);
     return content;
   });
   const writeFileSync = vi.fn((path: string, content: string) => {
-    files.set(String(path), String(content));
+    files.set(normalizePath(path), String(content));
   });
   const mkdirSync = vi.fn((path: string) => {
-    directories.add(String(path));
+    directories.add(normalizePath(path));
   });
   const unlinkSync = vi.fn((path: string) => {
-    files.delete(String(path));
+    files.delete(normalizePath(path));
   });
   const openSync = vi.fn((path: string) => {
-    const normalized = String(path);
+    const normalized = normalizePath(path);
     if (files.has(normalized)) {
       const err = new Error(`EEXIST: ${normalized}`) as NodeJS.ErrnoException;
       err.code = 'EEXIST';
@@ -43,7 +46,7 @@ function createFsMock(initialFiles: Record<string, string>) {
     return 1;
   });
   const statSync = vi.fn((path: string) => {
-    if (!files.has(String(path))) throw new Error(`ENOENT: ${path}`);
+    if (!files.has(normalizePath(path))) throw new Error(`ENOENT: ${path}`);
     return { mtimeMs: Date.now() };
   });
 
@@ -227,17 +230,9 @@ describe('usage API stale data handling', () => {
     });
 
     const { fsModule } = createFsMock({ [CACHE_PATH]: validRateLimitedCache });
-    vi.doMock('../../utils/paths.js', () => ({
-      getClaudeConfigDir: () => CLAUDE_CONFIG_DIR,
-    }));
-    vi.doMock('../../utils/ssrf-guard.js', () => ({
-      validateAnthropicBaseUrl: () => ({ allowed: true }),
-    }));
-    vi.doMock('child_process', async () => ({
-      ...(await vi.importActual<typeof import('child_process')>('child_process')),
-      execSync: vi.fn(),
-    }));
-    vi.doMock('fs', () => fsModule);
+    // 根因 C1：源码从 '../utils/config-dir.js' 导入 getClaudeConfigDir，
+    // 这里改用 setupMocks（mock config-dir.js 而非错误的 paths.js）
+    setupMocks(fsModule, 429, '');
 
     const { getUsage } = await import('../../hud/usage-api.js');
     const result = await getUsage();

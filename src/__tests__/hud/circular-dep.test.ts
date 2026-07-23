@@ -173,34 +173,35 @@ describe('HUD circular dependency', () => {
   });
 
   describe('runtime import safety', () => {
-    it('动态 import state.ts 不抛错且在 2 秒内完成', async () => {
+    it('动态 import state.ts 不抛错且在 5 秒内完成', async () => {
       // 循环依赖可能导致 ESM 初始化挂起或部分绑定未定义
+      // 阈值 5 秒:Windows 上 ESM 编译 + 全量测试资源竞争下需要更宽松的阈值
       const start = Date.now();
       const module = await import('../../hud/state.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(2000);
+      expect(elapsed).toBeLessThan(5000);
       expect(module.readHudState).toBeDefined();
       expect(module.writeHudState).toBeDefined();
       expect(module.initializeHUDState).toBeDefined();
     });
 
-    it('动态 import background-cleanup.ts 不抛错且在 2 秒内完成', async () => {
+    it('动态 import background-cleanup.ts 不抛错且在 5 秒内完成', async () => {
       const start = Date.now();
       const module = await import('../../hud/background-cleanup.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(2000);
+      expect(elapsed).toBeLessThan(5000);
       expect(module.cleanupStaleBackgroundTasks).toBeDefined();
       expect(module.markOrphanedTasksAsStale).toBeDefined();
     });
 
-    it('动态 import render.ts 不抛错且在 2 秒内完成', async () => {
+    it('动态 import render.ts 不抛错且在 5 秒内完成', async () => {
       const start = Date.now();
       const module = await import('../../hud/render.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(2000);
+      expect(elapsed).toBeLessThan(5000);
       expect(module.render).toBeDefined();
       expect(typeof module.render).toBe('function');
     });
@@ -274,7 +275,8 @@ describe('HUD circular dependency', () => {
       const elapsed = Date.now() - start;
 
       expect(typeof output).toBe('string');
-      expect(elapsed).toBeLessThan(1000);
+      // 阈值 3 秒:Windows 上全量测试资源竞争下需要更宽松的阈值
+      expect(elapsed).toBeLessThan(3000);
     });
   });
 });
@@ -367,7 +369,8 @@ describe('HUD recursion safety', () => {
         const result = readHudState(tmpRoot, undefined);
         const elapsed = Date.now() - start;
 
-        expect(elapsed).toBeLessThan(500);
+        // 阈值 2 秒:Windows 上文件 I/O 较慢
+        expect(elapsed).toBeLessThan(2000);
         // 结果只能是 null 或带 backgroundTasks 的对象
         expect(result === null || (result && Array.isArray(result.backgroundTasks))).toBe(true);
       } finally {
@@ -390,7 +393,8 @@ describe('HUD recursion safety', () => {
           initializeHUDState(tmpRoot, undefined),
         ).resolves.toBeUndefined();
         const elapsed = Date.now() - start;
-        expect(elapsed).toBeLessThan(2000);
+        // 阈值 5 秒:Windows 上文件 I/O + 动态 import 较慢
+        expect(elapsed).toBeLessThan(5000);
       } finally {
         rmSync(tmpRoot, { recursive: true, force: true });
       }

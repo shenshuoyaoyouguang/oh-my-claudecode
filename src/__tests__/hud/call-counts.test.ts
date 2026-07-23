@@ -1,8 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderCallCounts } from '../../hud/elements/call-counts.js';
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS } from '../../hud/types.js';
 
 describe('renderCallCounts', () => {
+  // 保存原始 platform 描述符,默认 mock 为 macOS 让 'auto' 模式走 emoji 分支
+  // (对应测试期望)。Issue #739: Windows 上 shouldUseAscii 返回 true 会走 ASCII。
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+
+  beforeEach(() => {
+    Object.defineProperty(process, 'platform', {
+      value: 'darwin',
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform);
+    }
+  });
+
   describe('basic rendering', () => {
     it('renders all three counts when all are non-zero', () => {
       const result = renderCallCounts(42, 7, 3);

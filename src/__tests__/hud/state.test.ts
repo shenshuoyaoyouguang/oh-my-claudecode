@@ -75,7 +75,8 @@ describe("readHudConfig", () => {
     it("reads callCountsFormat from settings.json", () => {
       mockExistsSync.mockImplementation((path) => {
         const s = String(path);
-        return /[\/]Users[\/]testuser[\/]\.claude[\/]settings\.json$/.test(
+        // 兼容 Windows(\)和 Unix(/)路径分隔符
+        return /[\\/]Users[\\/]testuser[\\/]\.claude[\\/]settings\.json$/.test(
           s,
         );
       });
@@ -233,7 +234,8 @@ describe("readHudConfig", () => {
     it("allows mission board to be explicitly enabled from settings", () => {
       mockExistsSync.mockImplementation((path) => {
         const s = String(path);
-        return /[\/]Users[\/]testuser[\/]\.claude[\/]settings\.json$/.test(s);
+        // 兼容 Windows(\)和 Unix(/)路径分隔符
+        return /[\\/]Users[\\/]testuser[\\/]\.claude[\\/]settings\.json$/.test(s);
       });
       mockReadFileSync.mockReturnValue(
         JSON.stringify({
@@ -385,7 +387,12 @@ describe("writeHudConfig", () => {
   it("merges legacy hud-config defaults into the written omcHud payload", () => {
     mockExistsSync.mockImplementation((path) => {
       const s = String(path);
-      return s.endsWith("settings.json") || s.endsWith(".omc/hud-config.json");
+      // 兼容 Windows(\)和 Unix(/)路径分隔符
+      return (
+        s.endsWith("settings.json") ||
+        s.endsWith(".omc/hud-config.json") ||
+        s.endsWith(".omc\\hud-config.json")
+      );
     });
     mockReadFileSync.mockImplementation((path) => {
       const s = String(path);
