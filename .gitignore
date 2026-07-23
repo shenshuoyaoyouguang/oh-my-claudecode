@@ -34,3 +34,8 @@ bridge/
 
 __pycache__/
 *.py[cod]
+
+# Local agent workflow artifacts
+Agent.md
+omc/
+tutorial/
