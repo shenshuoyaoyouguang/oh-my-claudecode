@@ -296,6 +296,20 @@ function isMainModule(): boolean {
   return process.argv[1] ? resolve(process.argv[1]) === __filename : false;
 }
 
+function releaseNextSteps(version: string): string {
+  return `
+  git switch -c release/v${version}
+  npm run build
+  npm run plugin:shipping:verify
+  npm run plugin:shipping:stage
+  git add -- package.json package-lock.json .claude-plugin/plugin.json .claude-plugin/marketplace.json docs/CLAUDE.md CHANGELOG.md README.md docs/REFERENCE.md .github/CLAUDE.md docs/ARCHITECTURE.md .github/release-body.md
+  git commit -S -m "chore(release): bump version to v${version}"
+  git push origin HEAD:release/v${version}
+  # Open a release PR from release/v${version} to dev. The signed commit is required; do not push or merge a protected branch directly.
+  # The maintainer shipping transaction stages only the verified generated closure.
+`;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {

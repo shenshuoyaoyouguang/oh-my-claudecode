@@ -1,31 +1,26 @@
-# oh-my-claudecode v4.15.5: Reliability Fixes
+# oh-my-claudecode v4.15.7: Bug Fixes
 
 ## Release Notes
 
-Release with **8 bug fixes** and **2 other changes** across **9 merged PRs**, plus one release-gate fix found during local macOS verification.
+Release with **4 bug fixes**, **1 other change** across **5 merged PRs**.
 
 ### Highlights
 
-- **fix(ci): bind artifact authorizer to dev event base** (#3486)
-- **fix(team): make watchdog task publication atomic** (#3488)
-- **fix(windows): avoid Git console flashes in hooks and HUD** (#3484)
+- **fix(psm): fail closed on malformed worktree results** (#3531)
+- **fix(psm): use jira-cli --raw instead of non-existent --output json** (#3529)
+- **fix(psm): use tmux-safe session names so sessions stay manageable** (#3530)
 
 ### Bug Fixes
 
-- **fix(ci): bind artifact authorizer to dev event base** (#3486)
-- **fix(windows): keep prompt hook timeout ownership in runner** (#3490)
-- **fix(team): make watchdog task publication atomic** (#3488)
-- **fix(windows): avoid Git console flashes in hooks and HUD** (#3484)
-- **fix(hooks): make SessionEnd shutdown durable and bounded** (#3478)
-- **fix: narrow workflow drift decision detection** (#3475)
-- **fix: validate direct team mailbox targets** (#3473)
-- **fix(team): fall back to locale-stable process start detection on macOS**
+- **fix(psm): fail closed on malformed worktree results** (#3531)
+- **fix(psm): use jira-cli --raw instead of non-existent --output json** (#3529)
+- **fix(psm): use tmux-safe session names so sessions stay manageable** (#3530)
+- **fix(windows): separate prompt host and worker timeouts** (#3525)
 
 ### Other Changes
 
-- **test(project-memory): guard packed learner against command harvesting** (#3495)
-- **ci: add base-owned generated artifact authorizer** (#3480)
+- **ci: add main generated-artifact authorization trust root** (#3540)
 
 ### Stats
 
-- **9 PRs merged** | **0 new features** | **8 bug fixes** | **0 security/hardening improvements** | **2 other changes**
+- **5 PRs merged** | **0 new features** | **4 bug fixes** | **0 security/hardening improvements** | **1 other change**
