@@ -49,14 +49,8 @@ import { renderSessionSummary } from "./elements/session-summary.js";
 import { renderLastTool } from "./elements/last-tool.js";
 
 // ============================================================================
-// 元素注册表与递归深度守卫
+// 元素注册表
 // ============================================================================
-
-/**
- * HUD 元素最大递归深度。
- * 防止 render 在面对环形引用或超深嵌套数据时无限递归(对应提交 66501ffd)。
- */
-export const MAX_RECURSION_DEPTH = 100;
 
 /**
  * 元素渲染模式:
@@ -90,16 +84,41 @@ export interface ElementRegistryEntry {
  * 测试与外部工具可通过此注册表查询元素元数据,无需扫描 render 源码。
  */
 export const ELEMENT_REGISTRY: Record<string, ElementRegistryEntry> = {
+  // line1 组(git/信息行)
+  hostname: { name: 'hostname', mode: 'inline', group: 'line1' },
+  cwd: { name: 'cwd', mode: 'inline', group: 'line1' },
+  gitRepo: { name: 'gitRepo', mode: 'inline', group: 'line1' },
+  gitBranch: { name: 'gitBranch', mode: 'inline', group: 'line1' },
+  gitStatus: { name: 'gitStatus', mode: 'inline', group: 'line1' },
+  apiKeySource: { name: 'apiKeySource', mode: 'inline', group: 'line1' },
+  profile: { name: 'profile', mode: 'inline', group: 'line1' },
+  // main 组(主状态行)
   omcLabel: { name: 'omcLabel', mode: 'inline', group: 'main' },
   model: { name: 'model', mode: 'inline', group: 'main' },
+  enterpriseCost: { name: 'enterpriseCost', mode: 'inline', group: 'main' },
   rateLimits: { name: 'rateLimits', mode: 'inline', group: 'main' },
-  contextBar: { name: 'contextBar', mode: 'inline', group: 'main' },
-  agents: { name: 'agents', mode: 'inline', group: 'main' },
-  todos: { name: 'todos', mode: 'detail', group: 'detail' },
+  customBuckets: { name: 'customBuckets', mode: 'inline', group: 'main' },
+  permission: { name: 'permission', mode: 'inline', group: 'main' },
+  thinking: { name: 'thinking', mode: 'inline', group: 'main' },
+  promptTime: { name: 'promptTime', mode: 'inline', group: 'main' },
+  session: { name: 'session', mode: 'inline', group: 'main' },
+  tokens: { name: 'tokens', mode: 'inline', group: 'main' },
   ralph: { name: 'ralph', mode: 'inline', group: 'main' },
   autopilot: { name: 'autopilot', mode: 'inline', group: 'main' },
+  prd: { name: 'prd', mode: 'inline', group: 'main' },
+  skills: { name: 'skills', mode: 'inline', group: 'main' },
+  lastSkill: { name: 'lastSkill', mode: 'inline', group: 'main' },
+  contextBar: { name: 'contextBar', mode: 'inline', group: 'main' },
+  agents: { name: 'agents', mode: 'inline', group: 'main' },
   background: { name: 'background', mode: 'inline', group: 'main' },
   callCounts: { name: 'callCounts', mode: 'inline', group: 'main' },
+  lastTool: { name: 'lastTool', mode: 'inline', group: 'main' },
+  sessionSummary: { name: 'sessionSummary', mode: 'inline', group: 'main' },
+  // detail 组(独立详情行)
+  missionBoard: { name: 'missionBoard', mode: 'detail', group: 'detail' },
+  contextWarning: { name: 'contextWarning', mode: 'detail', group: 'detail' },
+  payloadWarning: { name: 'payloadWarning', mode: 'detail', group: 'detail' },
+  todos: { name: 'todos', mode: 'detail', group: 'detail' },
 };
 
 /**

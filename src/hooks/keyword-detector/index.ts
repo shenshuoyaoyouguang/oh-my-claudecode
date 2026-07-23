@@ -55,7 +55,7 @@ const KEYWORD_PATTERNS: Record<KeywordType, RegExp> = {
   tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)|(テスト\s?ファースト)/i,
   'code-review': /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)|(コード\s?レビュー)(?!ア)/i,
   'security-review': /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)|(セキュリティ[ー]?\s?レビュー)(?!ア)/i,
-  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)|(?:深度)?优化/i,
+  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)|深度优化|(?<!代码|性能|数据|查询|配置|架构|算法|系统|网络|成本|结构|流程|资源|内存|缓存|索引|编译|存储)优化/i,
   deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)|(ディープ\s?サーチ)/i,
   analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)|(ディープ\s?アナライズ)/i,
   'deep-interview': /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)|(ディープインタビュー)/i,

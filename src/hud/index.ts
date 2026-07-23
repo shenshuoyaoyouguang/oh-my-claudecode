@@ -365,23 +365,31 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       // 写回,防止并发 lost update。锁文件在 finally 中自动释放。
       // 捕获到局部 const 以便闭包内保持类型收窄(sessionStart 是外层 let)。
       const sessionStartDate = sessionStart;
-      withFileLockSync(
-        getHudStateLockPath(cwd, currentSessionId ?? undefined),
-        () => {
-          const currentState = readHudState(cwd, currentSessionId ?? undefined);
-          const stateToWrite = currentState ?? {
-            timestamp: new Date().toISOString(),
-            backgroundTasks: [],
-          };
-          stateToWrite.sessionStartTimestamp = sessionStartDate.toISOString();
-          stateToWrite.sessionId = currentSessionId ?? undefined;
-          stateToWrite.timestamp = new Date().toISOString();
-          // 外层已持锁,内层 writeHudState 禁用锁以避免自死锁
-          writeHudState(stateToWrite, cwd, currentSessionId ?? undefined, {
-            lock: false,
-          });
-        },
-      );
+      // 锁争用时最多等 200ms,失败则降级为无锁写入,避免阻塞 HUD 渲染
+      const persistSessionStart = () => {
+        const currentState = readHudState(cwd, currentSessionId ?? undefined);
+        const stateToWrite = currentState ?? {
+          timestamp: new Date().toISOString(),
+          backgroundTasks: [],
+        };
+        stateToWrite.sessionStartTimestamp = sessionStartDate.toISOString();
+        stateToWrite.sessionId = currentSessionId ?? undefined;
+        stateToWrite.timestamp = new Date().toISOString();
+        // 外层已持锁,内层 writeHudState 禁用锁以避免自死锁
+        writeHudState(stateToWrite, cwd, currentSessionId ?? undefined, {
+          lock: false,
+        });
+      };
+      try {
+        withFileLockSync(
+          getHudStateLockPath(cwd, currentSessionId ?? undefined),
+          persistSessionStart,
+          { timeoutMs: 200, retryDelayMs: 20 },
+        );
+      } catch {
+        // 锁争用降级:无锁写入,避免阻塞 HUD 渲染
+        persistSessionStart();
+      }
     }
 
     // Merge Claude Code stdin generic buckets with API/cache-specific fields.

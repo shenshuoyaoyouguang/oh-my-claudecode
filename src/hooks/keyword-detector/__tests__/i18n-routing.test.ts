@@ -55,6 +55,38 @@ describe('i18n keyword detector routing', () => {
     });
   });
 
+  describe('名词复合词不应触发 ultrathink', () => {
+    it('不触发 "代码优化方案" (名词复合词)', () => {
+      // "代码优化" 作为名词复合词(方案/建议等后缀)不应触发 ultrathink
+      const result = detectKeywordsWithType('代码优化方案');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('不触发 "性能优化建议" (名词复合词)', () => {
+      // "性能优化" 作为名词复合词不应触发 ultrathink
+      const result = detectKeywordsWithType('性能优化建议');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('不触发 "数据库查询优化器" (名词复合词)', () => {
+      // "查询优化器" 作为名词复合词不应触发 ultrathink
+      const result = detectKeywordsWithType('数据库查询优化器');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('不触发 "系统架构优化" (名词复合词)', () => {
+      // "架构优化" 作为名词复合词不应触发 ultrathink
+      const result = detectKeywordsWithType('系统架构优化');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+
+    it('不触发 "配置优化说明" (名词复合词)', () => {
+      // "配置优化" 作为名词复合词不应触发 ultrathink
+      const result = detectKeywordsWithType('配置优化说明');
+      expect(result.find((r) => r.type === 'ultrathink')).toBeUndefined();
+    });
+  });
+
   describe('CJK file paths', () => {
     it('strips Chinese file path src/组件/按钮.tsx without false activation (4d5c1cda)', () => {
       const sanitized = sanitizeForKeywordDetection('打开 src/组件/按钮.tsx');

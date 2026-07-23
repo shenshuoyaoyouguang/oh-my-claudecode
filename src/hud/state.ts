@@ -294,7 +294,7 @@ export function writeHudState(
     // otherwise keep the legacy local path for backwards compatibility.
     ensureHudStateDir(directory, sessionId);
     const stateFile = getStateFilePath(directory, sessionId);
-    const lockPath = `${stateFile}.lock`;
+    const lockPath = getHudStateLockPath(directory, sessionId);
     const useLock = options?.lock !== false;
 
     // 写入与遗留文件清理逻辑,可在锁内执行以保证 RMW 原子性

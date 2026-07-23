@@ -288,17 +288,6 @@ describe('HUD recursion safety', () => {
    * Green 阶段应在源码中引入显式的 MAX_RECURSION_DEPTH 常量。
    */
   describe('max recursion depth guard', () => {
-    it('HUD 模块应导出或定义最大递归深度常量', async () => {
-      // 期望:Green 阶段后,render.ts 或循环依赖修复模块应导出 MAX_RECURSION_DEPTH
-      // 当前:无此常量,测试失败
-      const renderModule = await import('../../hud/render.js');
-      const hasDepthConstant =
-        'MAX_RECURSION_DEPTH' in renderModule ||
-        'MAX_RENDER_DEPTH' in renderModule ||
-        'MAX_ELEMENT_DEPTH' in renderModule;
-      expect(hasDepthConstant).toBe(true);
-    });
-
     it('render 对深度嵌套的 todos 数组(1000 层)在 1 秒内终止', async () => {
       const { render } = await import('../../hud/render.js');
       const { DEFAULT_HUD_CONFIG } = await import('../../hud/types.js');

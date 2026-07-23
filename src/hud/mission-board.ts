@@ -224,9 +224,19 @@ function writeState(directory: string, state: MissionBoardState, sessionId?: str
   if (!existsSync(stateDir)) {
     mkdirSync(stateDir, { recursive: true });
   }
-  withFileLockSync(writePath + '.lock', () => {
+  // 锁争用时最多等 200ms,失败则降级为无锁写入,避免阻塞 HUD 渲染
+  const writeStateLocked = () => {
     atomicWriteJsonSync(writePath, state);
-  });
+  };
+  try {
+    withFileLockSync(writePath + '.lock', writeStateLocked, {
+      timeoutMs: 200,
+      retryDelayMs: 20,
+    });
+  } catch {
+    // 锁争用降级:无锁写入,避免阻塞 HUD 渲染
+    writeStateLocked();
+  }
   return state;
 }
 
