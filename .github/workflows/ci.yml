@@ -55,6 +55,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Build bridge artifacts (bridge/*.cjs) before testing. The local
+      # policy keeps generated build artifacts out of git tracking, so CI
+      # must regenerate them. Tests like package-dir-resolution-regression
+      # and npm-package-bin-surface read these files directly.
+      - name: Build
+        run: npm run build
+
       - name: Run functional tests
         run: npm test -- --run
 

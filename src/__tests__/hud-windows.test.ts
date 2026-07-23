@@ -131,25 +131,25 @@ describe('HUD Windows Compatibility', () => {
   });
 
   describe('safeMode override (#346)', () => {
-    it('safeMode logic: explicit false overrides platform detection', () => {
+    it('safeMode logic: explicit true enables safe mode (modern terminals default off)', () => {
       // Simulate the logic from src/hud/index.ts
-      const resolveSafeMode = (safeMode: boolean, isWin32: boolean) =>
-        safeMode !== false && (safeMode || isWin32);
+      // Modern Windows terminals support ANSI/Unicode natively, so safe
+      // mode is opt-in via safeMode: true rather than forced on win32.
+      const resolveSafeMode = (safeMode: boolean, _isWin32: boolean) =>
+        safeMode === true;
 
-      // explicit false: disabled even on Windows
+      // explicit false: disabled
       expect(resolveSafeMode(false, true)).toBe(false);
       expect(resolveSafeMode(false, false)).toBe(false);
-      // explicit true: always enabled
+      // explicit true: enabled
       expect(resolveSafeMode(true, false)).toBe(true);
-      expect(resolveSafeMode(true, true)).toBe(true);
-      // default true on Windows: enabled
       expect(resolveSafeMode(true, true)).toBe(true);
     });
 
-    it('hud index.ts should use explicit-false override for safeMode', () => {
+    it('hud index.ts should use explicit-true opt-in for safeMode', () => {
       const indexPath = join(packageRoot, 'src', 'hud', 'index.ts');
       const content = readFileSync(indexPath, 'utf-8');
-      expect(content).toContain('config.elements.safeMode !== false');
+      expect(content).toContain('config.elements.safeMode === true');
     });
   });
 
