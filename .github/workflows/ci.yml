@@ -127,9 +127,6 @@ jobs:
         run: npm ci
 
       - name: Verify committed plugin shipping surface
-        # 本地策略：dist/ 不入库（.gitignore 忽略），仅 bridge/ 入库。
-        # 上游此验证要求 dist+bridge 全部 committed，与本地策略冲突，允许失败。
-        continue-on-error: true
         run: npm run plugin:shipping:verify
 
       - name: Build
