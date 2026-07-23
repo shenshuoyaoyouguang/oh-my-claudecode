@@ -338,11 +338,7 @@ ${clr('What it does:', c.cyan)}
   4. Runs sync-metadata to update doc badges
 
 ${clr('After running:', c.cyan)}
-  git add -A ':!dist/' ':!bridge/' && git commit -m "chore(release): bump version to vX.Y.Z"
-  git push origin dev
-  # Wait for CI green, then:
-  git checkout main && git merge dev && git push origin main
-  git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+${releaseNextSteps('X.Y.Z')}
   # release.yml handles npm publish + GitHub release
 `);
     return;
@@ -434,12 +430,8 @@ ${clr('After running:', c.cyan)}
   console.log(clr('\n✅ Done!', c.green));
   if (!dryRun) {
     console.log(clr('\nNext steps:', c.bold));
-    console.log(`  1. ${clr(`git add -A ':!dist/' ':!bridge/' && git commit -m "chore(release): bump version to v${newVersion}"`, c.cyan)}`);
-    console.log(`  2. ${clr('git push origin dev', c.cyan)}`);
-    console.log('  3. Wait for CI green');
-    console.log(`  4. ${clr('git checkout main && git merge dev && git push origin main', c.cyan)}`);
-    console.log(`  5. ${clr(`git tag -a v${newVersion} -m "v${newVersion}" && git push origin v${newVersion}`, c.cyan)}`);
-    console.log('  6. release.yml handles npm publish + GitHub release automatically');
+    console.log(releaseNextSteps(newVersion));
+    console.log('  release.yml handles npm publish + GitHub release automatically');
   }
 }
 
