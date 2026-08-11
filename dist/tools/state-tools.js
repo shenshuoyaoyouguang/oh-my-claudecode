@@ -29,7 +29,9 @@ const STATE_TOOL_MODES = [
     'ralplan',
     'omc-teams',
     'skill-active',
-    'merge-readiness'
+    'merge-readiness',
+    // Runtime guard mode for $ultragoal; not MODE_CONFIGS-backed (#3630).
+    'ultragoal',
 ];
 // Modes that may be generically written via state_write. Excludes merge-readiness (runtime-owned).
 const STATE_WRITE_MODES = [
@@ -38,7 +40,7 @@ const STATE_WRITE_MODES = [
     'omc-teams',
     'skill-active'
 ];
-const EXTRA_STATE_ONLY_MODES = ['ralplan', 'omc-teams', 'skill-active'];
+const EXTRA_STATE_ONLY_MODES = ['ralplan', 'omc-teams', 'skill-active', 'ultragoal'];
 const CANCEL_SIGNAL_TTL_MS = 30_000;
 const OWNER_SESSION_FALLBACK_MODES = new Set(['ralph']);
 const CONVERGED_STATE_PATH_MODES = new Set(['ralph', 'ultrawork']);

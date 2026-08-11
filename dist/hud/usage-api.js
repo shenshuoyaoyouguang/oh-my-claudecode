@@ -1,7 +1,8 @@
 /**
  * OMC HUD - Usage API
  *
- * Fetches rate limit usage from Anthropic's OAuth API.
+ * Fetches rate limit usage from Anthropic's OAuth API, with overrides for
+ * third-party providers (z.ai, MiniMax, Kimi) detected via ANTHROPIC_BASE_URL.
  * Based on claude-hud implementation by jarrodwatts.
  *
  * Authentication:
@@ -80,6 +81,34 @@ export function isMinimaxHost(urlString) {
     }
 }
 /**
+ * Check if a URL points to the Kimi For Coding platform (kimi.com).
+ * Matches kimi.com and any subdomain (e.g. api.kimi.com). The Moonshot open
+ * platform (api.moonshot.ai / api.moonshot.cn) is intentionally NOT matched:
+ * it exposes balance, not plan quota windows (no /usages endpoint).
+ */
+export function isKimiHost(urlString) {
+    try {
+        const url = new URL(urlString);
+        const hostname = url.hostname.toLowerCase();
+        return hostname === 'kimi.com' || hostname.endsWith('.kimi.com');
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Hostnames allowed to receive the Kimi bearer token.
+ *
+ * `isKimiHost()` deliberately matches every `*.kimi.com` subdomain so provider
+ * detection stays forgiving, but the credential itself must only ever travel to
+ * the first-party origin Moonshot documents (`https://api.kimi.com/coding/`).
+ * Pinning here keeps an attacker-influenced `ANTHROPIC_BASE_URL` — say a
+ * takeover-prone or user-content `*.kimi.com` subdomain — from exfiltrating it.
+ */
+const KIMI_USAGE_HOSTNAMES = new Set(['api.kimi.com', 'kimi.com']);
+/** Fixed path of the Kimi usage endpoint; never derived from the environment */
+const KIMI_USAGE_PATH = '/coding/v1/usages';
+/**
  * Get the legacy (pre-split) cache file path
  */
 function getLegacyCachePath() {
@@ -150,6 +179,15 @@ function readCache(source) {
             }
             if (cache.data.extraUsageResetsAt) {
                 cache.data.extraUsageResetsAt = new Date(cache.data.extraUsageResetsAt);
+            }
+            if (Array.isArray(cache.data.scopedWeeklyBuckets)) {
+                for (const bucket of cache.data.scopedWeeklyBuckets) {
+                    const rawResetsAt = bucket?.resetsAt;
+                    if (rawResetsAt == null || rawResetsAt instanceof Date)
+                        continue;
+                    const parsedResetsAt = new Date(rawResetsAt);
+                    bucket.resetsAt = isNaN(parsedResetsAt.getTime()) ? null : parsedResetsAt;
+                }
             }
         }
         return cache;
@@ -707,6 +745,78 @@ function clamp(v) {
     return Math.max(0, Math.min(100, v));
 }
 /**
+ * Parse `response.limits[]` defensively into recognized Sonnet/Opus weekly
+ * quotas plus a generic bucket list for unrecognized scoped weekly model
+ * families (e.g. "Fable").
+ *
+ * - Only `kind === "weekly_scoped"` entries are considered.
+ * - Entries missing/malformed `scope.model.display_name` or a finite `percent`
+ *   are skipped rather than throwing.
+ * - Family recognition is a case-insensitive substring match against
+ *   `display_name` (not an exact-case/enum match), so "Sonnet 4.5" or
+ *   "claude-sonnet" style names still map onto the Sonnet field.
+ * - Duplicate buckets for the same `display_name` are deduped, preferring the
+ *   entry flagged `is_active: true`; `is_active` is used only for this
+ *   tiebreak, never to hide/filter a bucket, so an inactive-but-present scoped
+ *   quota still renders.
+ * - When multiple *distinct* display names map onto the same recognized
+ *   family (e.g. two differently-named Sonnet tiers), the first one wins —
+ *   later ones do not overwrite an already-filled typed field.
+ */
+function resolveScopedWeeklyLimits(limits, parseDate) {
+    const result = { generic: [] };
+    if (!Array.isArray(limits))
+        return result;
+    // Dedup by normalized display_name, preferring the is_active entry.
+    const byKey = new Map();
+    for (const entry of limits) {
+        if (!entry || typeof entry !== 'object')
+            continue;
+        if (entry.kind !== 'weekly_scoped')
+            continue;
+        if (typeof entry.percent !== 'number' || !isFinite(entry.percent))
+            continue;
+        const displayName = entry.scope?.model?.display_name;
+        if (typeof displayName !== 'string' || displayName.trim() === '')
+            continue;
+        const key = displayName.trim().toLowerCase();
+        const isActive = entry.is_active === true;
+        const existing = byKey.get(key);
+        if (!existing || (isActive && !existing.isActive)) {
+            byKey.set(key, {
+                percent: entry.percent,
+                resetsAt: entry.resets_at,
+                isActive,
+                modelId: entry.scope?.model?.id,
+                displayName: displayName.trim(),
+            });
+        }
+    }
+    for (const bucket of byKey.values()) {
+        const percent = clamp(bucket.percent);
+        const resetsAt = parseDate(bucket.resetsAt);
+        const lower = bucket.displayName.toLowerCase();
+        const isSonnetFamily = lower.includes('sonnet');
+        const isOpusFamily = lower.includes('opus');
+        if (isSonnetFamily) {
+            // First Sonnet-family entry wins; later distinct Sonnet-named entries are
+            // dropped rather than falling through to the generic bucket (they refer
+            // to the same recognized family, not an unrecognized one).
+            if (result.sonnet == null)
+                result.sonnet = { percent, resetsAt };
+        }
+        else if (isOpusFamily) {
+            if (result.opus == null)
+                result.opus = { percent, resetsAt };
+        }
+        else {
+            const id = typeof bucket.modelId === 'string' && bucket.modelId.trim() !== '' ? bucket.modelId : lower;
+            result.generic.push({ id, label: bucket.displayName, percent, resetsAt, isActive: bucket.isActive });
+        }
+    }
+    return result;
+}
+/**
  * Resolve the minor-unit exponent for `used_credits`/`monthly_limit`.
  *
  * The API annotates the currency's minor-unit exponent in `decimal_places`
@@ -752,15 +862,6 @@ export function parseUsageResponse(response, options) {
     // overage stays USD-only until that renderer learns about currency.
     const hasUsableCreditExtraUsage = !isEnterpriseContext && usedCredits != null && extraCurrency === 'USD' && extra?.monthly_limit != null && extra.monthly_limit > 0;
     const hasUsableExtraUsage = hasUsableUsdExtraUsage || hasUsableCreditExtraUsage;
-    // Need at least one valid value. Model-specific weekly buckets are valid usage data
-    // even when generic subscription/window metadata is absent or nullish.
-    if (fiveHour == null &&
-        sevenDay == null &&
-        sonnetSevenDay == null &&
-        opusSevenDay == null &&
-        !hasUsableEnterprise &&
-        !hasUsableExtraUsage)
-        return null;
     // Parse ISO 8601 date strings to Date objects
     const parseDate = (dateStr) => {
         if (!dateStr)
@@ -773,27 +874,61 @@ export function parseUsageResponse(response, options) {
             return null;
         }
     };
+    // Fall back to `limits[]` (`kind: "weekly_scoped"`) for per-model weekly quotas
+    // when the legacy flat seven_day_sonnet/seven_day_opus fields are null/absent
+    // (see issue #3576). Recognized families (sonnet/opus) fill the typed fields;
+    // unrecognized model names (e.g. "Fable") become a generic bucket.
+    const scopedWeekly = resolveScopedWeeklyLimits(response.limits, parseDate);
+    // Need at least one valid value. Model-specific weekly buckets (flat or
+    // limits[]-derived) are valid usage data even when generic subscription/window
+    // metadata is absent or nullish.
+    if (fiveHour == null &&
+        sevenDay == null &&
+        sonnetSevenDay == null &&
+        opusSevenDay == null &&
+        !hasUsableEnterprise &&
+        !hasUsableExtraUsage &&
+        scopedWeekly.sonnet == null &&
+        scopedWeekly.opus == null &&
+        scopedWeekly.generic.length === 0)
+        return null;
     // Per-model quotas are at the top level (flat structure)
     // e.g., response.seven_day_sonnet, response.seven_day_opus
     const sonnetResetsAt = response.seven_day_sonnet?.resets_at;
-    const result = {
-        fiveHourPercent: clamp(fiveHour),
-        fiveHourResetsAt: parseDate(response.five_hour?.resets_at),
-    };
+    const result = {};
+    if (fiveHour != null) {
+        result.fiveHourPercent = clamp(fiveHour);
+        result.fiveHourResetsAt = parseDate(response.five_hour?.resets_at);
+    }
     if (sevenDay != null) {
         result.weeklyPercent = clamp(sevenDay);
         result.weeklyResetsAt = parseDate(response.seven_day?.resets_at);
     }
-    // Add Sonnet-specific quota if available from API
+    // Add Sonnet-specific quota if available from API (flat field takes precedence;
+    // limits[] weekly_scoped fallback only fills the gap when the flat field is
+    // null/absent — never overwrites trustworthy old-shape data).
     if (sonnetSevenDay != null) {
         result.sonnetWeeklyPercent = clamp(sonnetSevenDay);
         result.sonnetWeeklyResetsAt = parseDate(sonnetResetsAt);
     }
-    // Add Opus-specific quota if available from API
+    else if (scopedWeekly.sonnet != null) {
+        result.sonnetWeeklyPercent = scopedWeekly.sonnet.percent;
+        result.sonnetWeeklyResetsAt = scopedWeekly.sonnet.resetsAt;
+    }
+    // Add Opus-specific quota if available from API (same precedence as Sonnet above).
     const opusResetsAt = response.seven_day_opus?.resets_at;
     if (opusSevenDay != null) {
         result.opusWeeklyPercent = clamp(opusSevenDay);
         result.opusWeeklyResetsAt = parseDate(opusResetsAt);
+    }
+    else if (scopedWeekly.opus != null) {
+        result.opusWeeklyPercent = scopedWeekly.opus.percent;
+        result.opusWeeklyResetsAt = scopedWeekly.opus.resetsAt;
+    }
+    // Unrecognized scoped weekly model buckets (e.g. "Fable") render generically so
+    // new tiers don't need a source release.
+    if (scopedWeekly.generic.length > 0) {
+        result.scopedWeeklyBuckets = scopedWeekly.generic;
     }
     // Add extra (metered) usage if available (Pro subscribers with extra usage allocation)
     if (extra != null) {
@@ -1020,6 +1155,256 @@ export function parseMinimaxResponse(response) {
     };
 }
 /**
+ * Fetch usage from the Kimi For Coding platform.
+ *
+ * Endpoint: GET https://{canonical kimi host}/coding/v1/usages. Only the host
+ * comes from ANTHROPIC_BASE_URL (whose path may be /coding, /coding/, or
+ * /coding/v1 depending on setup docs) and it must be one of
+ * KIMI_USAGE_HOSTNAMES — the bearer token never leaves that origin.
+ * Auth: Bearer token — accepts both Kimi API keys (METHOD_API_KEY) and OAuth
+ * access tokens from the kimi-code CLI.
+ */
+function fetchUsageFromKimi(apiKey) {
+    return new Promise((resolve) => {
+        const baseUrl = process.env.ANTHROPIC_BASE_URL;
+        if (!baseUrl) {
+            resolve({ data: null });
+            return;
+        }
+        // Validate baseUrl for SSRF protection
+        const validation = validateAnthropicBaseUrl(baseUrl);
+        if (!validation.allowed) {
+            console.error(`[SSRF Guard] Blocking usage API call: ${validation.reason}`);
+            resolve({ data: null });
+            return;
+        }
+        try {
+            const hostname = new URL(baseUrl).hostname.toLowerCase();
+            // Provider detection accepts any *.kimi.com host; the credential does not.
+            if (!KIMI_USAGE_HOSTNAMES.has(hostname)) {
+                if (process.env.OMC_DEBUG) {
+                    console.error(`[usage-api] Refusing to send Kimi credentials to non-canonical host '${hostname}'`);
+                }
+                resolve({ data: null });
+                return;
+            }
+            const req = https.request({
+                hostname,
+                path: KIMI_USAGE_PATH,
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Accept': 'application/json',
+                },
+                timeout: API_TIMEOUT_MS,
+            }, (res) => {
+                let data = '';
+                // A socket reset *after* headers arrive surfaces on the response
+                // stream, not the request. Without these listeners that 'error' is
+                // unhandled and takes the HUD process down instead of degrading to a
+                // network failure. resolve() past the first call is a no-op.
+                res.on('error', () => resolve({ data: null }));
+                res.on('aborted', () => resolve({ data: null }));
+                res.on('data', (chunk) => { data += chunk; });
+                res.on('end', () => {
+                    if (res.statusCode === 200) {
+                        try {
+                            resolve({ data: JSON.parse(data) });
+                        }
+                        catch {
+                            resolve({ data: null });
+                        }
+                    }
+                    else if (res.statusCode === 429) {
+                        if (process.env.OMC_DEBUG) {
+                            console.error(`[usage-api] Kimi API returned 429 (rate limited)`);
+                        }
+                        resolve({ data: null, rateLimited: true });
+                    }
+                    else {
+                        resolve({ data: null });
+                    }
+                });
+            });
+            req.on('error', () => resolve({ data: null }));
+            req.on('timeout', () => { req.destroy(); resolve({ data: null }); });
+            req.end();
+        }
+        catch {
+            resolve({ data: null });
+        }
+    });
+}
+/**
+ * Parse a Kimi quota row's number-ish field (wire format uses strings).
+ */
+function kimiToNumber(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === 'string' && value.length > 0) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
+/**
+ * Parse a Kimi resetTime/reset_at/resetAt ISO string into a Date.
+ * Trims nano-precision fractions to milliseconds so Date.parse never chokes.
+ */
+function parseKimiResetTime(row) {
+    const raw = row?.resetTime ?? row?.reset_at ?? row?.resetAt;
+    // Runtime payloads are untrusted: a non-string reset field must not throw
+    // (parseFn exceptions would escape fetchAndCacheUsage into the HUD).
+    if (typeof raw !== 'string' || raw.length === 0)
+        return null;
+    let normalized = raw;
+    if (normalized.includes('.') && normalized.endsWith('Z')) {
+        const [base, frac] = normalized.slice(0, -1).split('.');
+        if (base && frac) {
+            normalized = `${base}.${frac.slice(0, 3)}Z`;
+        }
+    }
+    try {
+        const date = new Date(normalized);
+        return isNaN(date.getTime()) ? null : date;
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Normalize a Kimi currency code to upper case, or null when absent.
+ * Non-string values are rejected rather than coerced: runtime payloads are
+ * untrusted and `.toUpperCase()` on a number would throw into the HUD.
+ */
+function kimiCurrencyCode(value) {
+    return typeof value === 'string' && value.length > 0 ? value.toUpperCase() : null;
+}
+/**
+ * Used quota for a Kimi row: direct `used`, or `limit - remaining` fallback
+ * (mirrors kimi-code's loose parser — field spelling drifted across versions).
+ */
+function kimiUsedQuota(row) {
+    const used = kimiToNumber(row.used);
+    if (used != null)
+        return used;
+    const limit = kimiToNumber(row.limit);
+    const remaining = kimiToNumber(row.remaining);
+    if (limit != null && remaining != null)
+        return limit - remaining;
+    return null;
+}
+/**
+ * Convert a Kimi limits[] window descriptor to total minutes, or null when
+ * the window shape is unknown (duration missing or unrecognized timeUnit).
+ */
+function kimiWindowMinutes(window) {
+    const duration = window?.duration;
+    // Untrusted payload: a non-string timeUnit must not throw on .includes()
+    const rawUnit = window?.timeUnit;
+    const timeUnit = typeof rawUnit === 'string' ? rawUnit : '';
+    if (duration == null || !Number.isFinite(duration) || duration <= 0)
+        return null;
+    if (timeUnit.includes('MINUTE'))
+        return duration;
+    if (timeUnit.includes('HOUR'))
+        return duration * 60;
+    if (timeUnit.includes('DAY'))
+        return duration * 60 * 24;
+    return null;
+}
+/**
+ * Duration of the Kimi For Coding rolling window the HUD renders as "5h".
+ *
+ * Kimi documents a rolling 5-hour rate window on top of the weekly quota, and
+ * the live payload reports it as `{ duration: 300, timeUnit: TIME_UNIT_MINUTE }`.
+ * Only this exact duration may fill `fiveHourPercent`: the HUD prints that field
+ * under a hard-coded "5h" label, so accepting a nearby window (a 1h burst cap,
+ * say) would report one product limit while claiming another.
+ */
+const KIMI_FIVE_HOUR_WINDOW_MINUTES = 300;
+/**
+ * Parse Kimi For Coding `/usages` response into RateLimits.
+ *
+ * Mapping (verified against live payload):
+ * - Top-level `usage` → weekly window (resetTime ~7 days out)
+ * - `limits[]` entry whose window is exactly 300 minutes → 5-hour window
+ *   (observed: window.duration=300, timeUnit=TIME_UNIT_MINUTE). Any other
+ *   duration is dropped, never rendered under the HUD's "5h" label.
+ * - `boosterWallet` (optional) → extra usage, USD only: the HUD's extra-usage
+ *   renderer hard-codes "$", so CNY wallets are skipped rather than mislabeled.
+ */
+export function parseKimiResponse(response) {
+    // fiveHourPercent is intentionally left unset: seeding 0 would render as
+    // "5h:0%" for a payload that carried no 5-hour window at all, asserting zero
+    // usage of a quota we have no data for.
+    const result = {};
+    let hasAny = false;
+    // Weekly window: top-level usage row
+    const weekly = response.usage;
+    if (weekly) {
+        const limit = kimiToNumber(weekly.limit);
+        const used = kimiUsedQuota(weekly);
+        if (limit != null && limit > 0 && used != null) {
+            result.weeklyPercent = clamp((used / limit) * 100);
+            result.weeklyResetsAt = parseKimiResetTime(weekly);
+            hasAny = true;
+        }
+    }
+    // 5-hour window: the limits[] entry whose window is exactly 5 hours. Windows
+    // of any other duration (and unclassifiable ones) are left out rather than
+    // relabelled — see KIMI_FIVE_HOUR_WINDOW_MINUTES.
+    const limits = Array.isArray(response.limits) ? response.limits : [];
+    let filledFiveHour = false;
+    let sawOtherWindow = false;
+    for (const entry of limits) {
+        if (!entry || typeof entry !== 'object')
+            continue;
+        if (kimiWindowMinutes(entry.window) !== KIMI_FIVE_HOUR_WINDOW_MINUTES) {
+            sawOtherWindow = true;
+            continue;
+        }
+        const row = entry.detail ?? entry;
+        const limit = kimiToNumber(row.limit);
+        const used = kimiUsedQuota(row);
+        // Keep scanning on an unusable row: a duplicate 5h entry may still be good
+        if (limit == null || limit <= 0 || used == null)
+            continue;
+        result.fiveHourPercent = clamp((used / limit) * 100);
+        result.fiveHourResetsAt = parseKimiResetTime(row);
+        hasAny = true;
+        filledFiveHour = true;
+        break;
+    }
+    if (!filledFiveHour && sawOtherWindow && process.env.OMC_DEBUG) {
+        console.error(`[usage-api] Kimi limits[] carried no ${KIMI_FIVE_HOUR_WINDOW_MINUTES}-minute window — 5h bucket left empty`);
+    }
+    // Extra (metered) usage: booster wallet monthly spend vs monthly cap.
+    // Monthly figures arrive as priceInCents. USD-only — see comment above; an
+    // absent currency is skipped too (never guess "$" for an unknown currency).
+    const wallet = response.boosterWallet;
+    if (wallet?.balance?.type === 'BOOSTER') {
+        const limitCents = kimiToNumber(wallet.monthlyChargeLimit?.priceInCents);
+        const usedCents = kimiToNumber(wallet.monthlyUsed?.priceInCents);
+        // Both sides must declare USD independently. Falling back from one to the
+        // other would render a mismatched pair (limit USD / used CNY) as one "$"
+        // figure over another, silently misstating the spend.
+        const limitCurrency = kimiCurrencyCode(wallet.monthlyChargeLimit?.currency);
+        const usedCurrency = kimiCurrencyCode(wallet.monthlyUsed?.currency);
+        if (wallet.monthlyChargeLimitEnabled === true &&
+            limitCents != null && limitCents > 0 &&
+            usedCents != null &&
+            limitCurrency === 'USD' && usedCurrency === 'USD') {
+            result.extraUsageSpentUsd = usedCents / 100;
+            result.extraUsageLimitUsd = limitCents / 100;
+            result.extraUsagePercent = clamp((usedCents / limitCents) * 100);
+            hasAny = true;
+        }
+    }
+    return hasAny ? result : null;
+}
+/**
  * Generic provider fetch-and-cache cycle.
  * Handles 429 backoff, stale data fallback, and cache writes.
  * Provider-specific pre-fetch logic (e.g., credential refresh) runs before calling this.
@@ -1081,9 +1466,21 @@ export async function getUsage() {
     const baseUrl = process.env.ANTHROPIC_BASE_URL;
     const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
     const isMinimax = baseUrl != null && isMinimaxHost(baseUrl);
+    const isKimi = baseUrl != null && isKimiHost(baseUrl);
     const isZai = baseUrl != null && isZaiHost(baseUrl);
     const minimaxApiKey = process.env.MINIMAX_API_KEY || authToken;
-    const currentSource = isMinimax ? 'minimax' : isZai && authToken ? 'zai' : 'anthropic';
+    // Kimi For Coding documents `ANTHROPIC_BASE_URL=https://api.kimi.com/coding/`
+    // paired with `ANTHROPIC_API_KEY`; the Moonshot open platform and the
+    // kimi-code CLI use `ANTHROPIC_AUTH_TOKEN` instead. Both reach this branch,
+    // so try them in order of specificity to this host:
+    //   1. KIMI_API_KEY        — explicit, provider-scoped override
+    //   2. ANTHROPIC_API_KEY   — the documented credential for api.kimi.com
+    //   3. ANTHROPIC_AUTH_TOKEN — OAuth access tokens / platform-style setups
+    // (2) outranks (3) because Moonshot warns the two conflict and tells users on
+    // this endpoint to unset ANTHROPIC_AUTH_TOKEN — a leftover one must not mask
+    // the key the documented setup actually authenticates with.
+    const kimiApiKey = process.env.KIMI_API_KEY || process.env.ANTHROPIC_API_KEY || authToken;
+    const currentSource = isMinimax ? 'minimax' : isKimi ? 'kimi' : isZai && authToken ? 'zai' : 'anthropic';
     const pollIntervalMs = getUsagePollIntervalMs();
     // Migrate legacy single-file cache to provider-specific file (one-shot, best-effort)
     migrateLegacyCache(currentSource);
@@ -1107,6 +1504,20 @@ export async function getUsage() {
                     source: 'minimax',
                     fetchFn: () => fetchUsageFromMinimax(minimaxApiKey),
                     parseFn: parseMinimaxResponse,
+                    cache,
+                    pollIntervalMs,
+                });
+            }
+            // Kimi path (must precede z.ai and OAuth checks)
+            if (isKimi) {
+                if (!kimiApiKey) {
+                    writeCache({ data: null, error: true, source: 'kimi', errorReason: 'no_credentials' });
+                    return { rateLimits: null, error: 'no_credentials' };
+                }
+                return fetchAndCacheUsage({
+                    source: 'kimi',
+                    fetchFn: () => fetchUsageFromKimi(kimiApiKey),
+                    parseFn: parseKimiResponse,
                     cache,
                     pollIntervalMs,
                 });

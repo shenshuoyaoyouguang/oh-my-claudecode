@@ -189,6 +189,7 @@ export interface TeamTaskClaim {
   owner: string;
   token: string;
   leased_until: string;
+  launch_attempt_id?: string;
 }
 
 /** Base team task matching OMX shape */
@@ -305,7 +306,7 @@ export type RecoverDeadWorkerV2Error =
   | 'worker_liveness_unknown' | 'recovery_checkpoint_missing' | 'recovery_checkpoint_malformed'
   | 'recovery_checkpoint_ambiguous' | 'recovery_checkpoint_stale' | 'task_requeue_failed'
   | 'launch_metadata_incomplete' | 'launch_descriptor_unresolvable' | 'spawn_failed'
-  | 'startup_ack_timeout' | 'worker_activation_failed' | 'auto_merge_unavailable'
+  | 'startup_ack_timeout' | 'worker_activation_failed' | 'worker_cleanup_incomplete' | 'auto_merge_unavailable'
   | 'stale_state_revision' | 'config_commit_failed';
 
 export interface RecoverDeadWorkerV2OutcomeBase {
@@ -352,7 +353,7 @@ export interface TeamRuntimeOwnerEpoch {
 /** Durable lifecycle fence for a scale-up operation. */
 export interface TeamScaleUpAttempt {
   operation_id: string;
-  phase: 'reserved' | 'effects' | 'failed';
+  phase: 'reserved' | 'effects' | 'committed' | 'failed';
   pid: number;
   process_started_at: string;
   state_revision: number;
@@ -483,6 +484,7 @@ export interface WorkerInfo {
   recovery_id?: string;
   replacement_generation?: number;
   pane_attempt_id?: string;
+  launch_attempt_id?: string;
   operational_state?: 'starting' | 'active' | 'dead' | 'stopped';
   launch_descriptor?: WorkerLaunchDescriptor;
 }
@@ -744,6 +746,7 @@ export interface WorkerStatus {
   state: 'idle' | 'working' | 'blocked' | 'done' | 'failed' | 'draining' | 'unknown';
   current_task_id?: string;
   reason?: string;
+  launch_attempt_id?: string;
   updated_at: string;
 }
 

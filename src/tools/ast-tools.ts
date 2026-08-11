@@ -24,7 +24,11 @@ import { isToolPathRestricted } from "../lib/security-config.js";
 // via NODE_PATH set in the bundle's startup banner.
 let sgModule: typeof import("@ast-grep/napi") | null = null;
 let sgLoadFailed = false;
-let sgLoadError = '';
+let sgLoadError = "";
+const AST_GREP_INSTALL_COMMAND = "npm install -g @ast-grep/napi@0.31";
+const AST_GREP_RECOVERY_GUIDANCE =
+  `Install the supported runtime with: ${AST_GREP_INSTALL_COMMAND}\n` +
+  "Then restart Claude Code (or the MCP server) so @ast-grep/napi is reloaded.";
 
 async function getSgModule(): Promise<typeof import("@ast-grep/napi") | null> {
   if (sgLoadFailed) {
@@ -33,7 +37,9 @@ async function getSgModule(): Promise<typeof import("@ast-grep/napi") | null> {
   if (!sgModule) {
     try {
       // Use createRequire for CJS-style resolution (respects NODE_PATH)
-      const require = createRequire(import.meta.url || __filename || process.cwd() + '/');
+      const require = createRequire(
+        import.meta.url || __filename || process.cwd() + "/",
+      );
       sgModule = require("@ast-grep/napi") as typeof import("@ast-grep/napi");
     } catch {
       // Fallback to dynamic import for pure ESM environments
@@ -112,7 +118,9 @@ function toLangEnum(
 
   const lang = langMap[language];
   if (!lang) {
-    throw new Error(`Unsupported language: ${language}`);
+    throw new Error(
+      `Unsupported language: ${language}. The loaded @ast-grep/napi runtime does not provide this language.\n${AST_GREP_RECOVERY_GUIDANCE}`,
+    );
   }
   return lang;
 }
@@ -242,7 +250,9 @@ function getFilesForLanguage(
   try {
     stat = statSync(resolvedPath);
   } catch (err) {
-    throw new Error(`Cannot access path "${resolvedPath}": ${(err as Error).message}`);
+    throw new Error(
+      `Cannot access path "${resolvedPath}": ${(err as Error).message}`,
+    );
   }
 
   if (stat.isFile()) {
@@ -346,7 +356,7 @@ Note: Patterns must be valid AST nodes for the language.`,
           content: [
             {
               type: "text" as const,
-              text: `@ast-grep/napi is not available. Install it with: npm install -g @ast-grep/napi\nError: ${sgLoadError}`,
+              text: `@ast-grep/napi is not available.\n${AST_GREP_RECOVERY_GUIDANCE}\nError: ${sgLoadError}`,
             },
           ],
         };
@@ -363,6 +373,7 @@ Note: Patterns must be valid AST nodes for the language.`,
           ],
         };
       }
+      const lang = toLangEnum(sg, language);
 
       const results: string[] = [];
       let totalMatches = 0;
@@ -372,7 +383,7 @@ Note: Patterns must be valid AST nodes for the language.`,
 
         try {
           const content = readFileSync(filePath, "utf-8");
-          const root = sg.parse(toLangEnum(sg, language), content).root();
+          const root = sg.parse(lang, content).root();
           const matches = root.findAll(pattern);
 
           for (const match of matches) {
@@ -482,7 +493,7 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
           content: [
             {
               type: "text" as const,
-              text: `@ast-grep/napi is not available. Install it with: npm install -g @ast-grep/napi\nError: ${sgLoadError}`,
+              text: `@ast-grep/napi is not available.\n${AST_GREP_RECOVERY_GUIDANCE}\nError: ${sgLoadError}`,
             },
           ],
         };
@@ -499,6 +510,7 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
           ],
         };
       }
+      const lang = toLangEnum(sg, language);
 
       const changes: {
         file: string;
@@ -511,7 +523,7 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
       for (const filePath of files) {
         try {
           const content = readFileSync(filePath, "utf-8");
-          const root = sg.parse(toLangEnum(sg, language), content).root();
+          const root = sg.parse(lang, content).root();
           const matches = root.findAll(pattern);
 
           if (matches.length === 0) continue;
@@ -549,7 +561,7 @@ IMPORTANT: dryRun=true (default) only previews changes. Set dryRun=false to appl
                 if (captured) {
                   // Escape $ in captured text to prevent JS replacement patterns
                   // ($&, $', $`, $$) from being interpreted by replaceAll
-                  const safeText = captured.text().replace(/\$/g, '$$$$');
+                  const safeText = captured.text().replace(/\$/g, "$$$$");
                   finalReplacement = finalReplacement.replaceAll(
                     metaVar,
                     safeText,

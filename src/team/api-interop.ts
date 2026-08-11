@@ -83,6 +83,7 @@ const RECOVERY_ERROR_CODES = new Set([
   'recovery_checkpoint_ambiguous', 'recovery_checkpoint_stale', 'task_requeue_failed',
   'launch_metadata_incomplete', 'launch_descriptor_unresolvable', 'spawn_failed',
   'startup_ack_timeout', 'worker_activation_failed', 'auto_merge_unavailable',
+  'worker_cleanup_incomplete',
   'stale_state_revision', 'config_commit_failed',
 ]);
 
@@ -277,12 +278,29 @@ export function resolveTeamApiCliCommand(env: NodeJS.ProcessEnv = process.env): 
   return 'omc team api';
 }
 
-function isRuntimeV2Config(config: unknown): config is { workers: unknown[] } {
-  return !!config && typeof config === 'object' && Array.isArray((config as { workers?: unknown[] }).workers);
+/**
+ * Classify team configs BEFORE relying on canonicalized shape.
+ * V1 (legacy) configs are identified by the durable `agentTypes` field.
+ * An empty `workers: []` array must NOT be treated as V2 provenance — that is
+ * often injected by canonicalizeTeamConfigWorkers on raw V1 configs.
+ */
+function isLegacyRuntimeConfig(config: unknown): config is {
+  agentTypes: unknown[];
+  tmuxSession?: string;
+  leaderPaneId?: string | null;
+  tmuxOwnsWindow?: boolean;
+} {
+  return !!config && typeof config === 'object'
+    && Array.isArray((config as { agentTypes?: unknown[] }).agentTypes);
 }
 
-function isLegacyRuntimeConfig(config: unknown): config is { tmuxSession?: string; leaderPaneId?: string | null; tmuxOwnsWindow?: boolean } {
-  return !!config && typeof config === 'object' && Array.isArray((config as { agentTypes?: unknown[] }).agentTypes);
+function isRuntimeV2Config(config: unknown): config is { workers: unknown[] } {
+  if (!config || typeof config !== 'object') return false;
+  // Legacy agentTypes provenance wins over any workers array (including []).
+  // teamReadConfig preserves agentTypes for on-disk V1 configs so they never
+  // reach this branch after empty-workers canonicalization.
+  if (isLegacyRuntimeConfig(config)) return false;
+  return Array.isArray((config as { workers?: unknown[] }).workers);
 }
 
 function assertNoNativeWorktreeCleanupEvidence(teamName: string, cwd: string): void {
@@ -317,11 +335,7 @@ async function executeTeamCleanupViaRuntime(teamName: string, cwd: string): Prom
     return;
   }
 
-  if (isRuntimeV2Config(config)) {
-    await shutdownTeamV2(teamName, cwd);
-    return;
-  }
-
+  // Legacy first: agentTypes provenance must not be shadowed by empty workers[].
   if (isLegacyRuntimeConfig(config)) {
     const legacyConfig = config as { tmuxSession?: string; leaderPaneId?: string | null; tmuxOwnsWindow?: boolean };
     const sessionName = typeof legacyConfig.tmuxSession === 'string' && legacyConfig.tmuxSession.trim() !== ''
@@ -330,7 +344,14 @@ async function executeTeamCleanupViaRuntime(teamName: string, cwd: string): Prom
     const leaderPaneId = typeof legacyConfig.leaderPaneId === 'string' && legacyConfig.leaderPaneId.trim() !== ''
       ? legacyConfig.leaderPaneId.trim()
       : undefined;
-    await shutdownTeam(teamName, sessionName, cwd, 30_000, undefined, leaderPaneId, legacyConfig.tmuxOwnsWindow === true);
+    const cleaned = await shutdownTeam(teamName, sessionName, cwd, 30_000, undefined, leaderPaneId, legacyConfig.tmuxOwnsWindow === true);
+    if (!cleaned) throw new Error(`team_shutdown_failed:legacy_cleanup_unverified`);
+    return;
+  }
+
+  if (isRuntimeV2Config(config)) {
+    const shutdown = await shutdownTeamV2(teamName, cwd);
+    if (shutdown.outcome !== 'cleaned') throw new Error(`team_shutdown_${shutdown.outcome}:${shutdown.reason}`);
     return;
   }
 

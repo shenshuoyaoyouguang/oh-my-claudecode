@@ -1,29 +1,24 @@
-# oh-my-claudecode v4.15.7: Bug Fixes
+# oh-my-claudecode v4.15.10: Bug Fixes
 
 ## Release Notes
 
-Release with **4 bug fixes**, **1 other change** across **5 merged PRs**.
+Release with **3 bug fixes** across **4 merged PRs**.
 
 ### Highlights
 
-- **fix(psm): fail closed on malformed worktree results** (#3531)
-- **fix(psm): use jira-cli --raw instead of non-existent --output json** (#3529)
-- **fix(psm): use tmux-safe session names so sessions stay manageable** (#3530)
+- **fix(hud): keep watch mode running between polls** (#3659)
+- **fix(team): deliver POSIX supervised worker launch through attempt descriptor** (#3657)
+- **fix(rules-injector): bound upward rule walk when no project root exists** (#3654)
 
 ### Bug Fixes
 
-- **fix(psm): fail closed on malformed worktree results** (#3531)
-- **fix(psm): use jira-cli --raw instead of non-existent --output json** (#3529)
-- **fix(psm): use tmux-safe session names so sessions stay manageable** (#3530)
-- **fix(windows): separate prompt host and worker timeouts** (#3525)
-
-### Other Changes
-
-- **ci: add main generated-artifact authorization trust root** (#3540)
+- **fix(hud): keep watch mode running between polls** (#3659)
+- **fix(team): deliver POSIX supervised worker launch through attempt descriptor** (#3657)
+- **fix(rules-injector): bound upward rule walk when no project root exists** (#3654)
 
 ### Stats
 
-- **5 PRs merged** | **0 new features** | **4 bug fixes** | **0 security/hardening improvements** | **1 other change**
+- **4 PRs merged** | **0 new features** | **3 bug fixes** | **0 security/hardening improvements** | **0 other changes**
 
 ### Install / Update
 
@@ -32,7 +27,7 @@ The npm CLI and the Claude Code marketplace/plugin are separate install tracks, 
 **CLI / runtime:**
 
 ```bash
-npm install -g oh-my-claude-sisyphus@4.15.7
+npm install -g oh-my-claude-sisyphus@4.15.10
 ```
 
 **Claude Code plugin:**
@@ -41,10 +36,10 @@ npm install -g oh-my-claude-sisyphus@4.15.7
 /plugin marketplace update omc
 ```
 
-**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v4.15.6...v4.15.7
+**Full Changelog**: https://github.com/Yeachan-Heo/oh-my-claudecode/compare/v4.15.9...v4.15.10
 
 ## Contributors
 
 Thank you to all contributors who made this release possible!
 
-@Yeachan-Heo
+@Iams4kura @Yeachan-Heo

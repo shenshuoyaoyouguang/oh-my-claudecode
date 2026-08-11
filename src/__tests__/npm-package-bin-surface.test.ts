@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
   symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,6 +34,7 @@ type PackageJson = {
   bin?: Record<string, string>;
   name?: string;
   version?: string;
+  devDependencies?: Record<string, string>;
 };
 
 type PackedPackage = {
@@ -50,7 +52,7 @@ type PluginShippingSurface = {
 
 const CLI_BIN_TARGET = "bin/oh-my-claudecode.js";
 const SUPPORTED_CLI_ALIASES = ["oh-my-claudecode", "omc"] as const;
-const GENERATED_BRIDGE_FILES = new Set([
+const GENERATED_RUNTIME_ENTRYPOINTS = new Set([
   "bridge/claude-md-coordinator.cjs",
   "bridge/cli.cjs",
   "bridge/mcp-server.cjs",
@@ -58,6 +60,7 @@ const GENERATED_BRIDGE_FILES = new Set([
   "bridge/team-bridge.cjs",
   "bridge/team-mcp.cjs",
   "bridge/team.js",
+  "dist/hooks/skill-bridge.cjs",
 ]);
 
 let packedPackageCache: PackedPackage | null = null;
@@ -97,7 +100,7 @@ function createIsolatedPackWorkspace(
     preserveTimestamps: true,
   });
   rmSync(join(workspacePath, "dist"), { recursive: true, force: true });
-  for (const relativePath of GENERATED_BRIDGE_FILES) {
+  for (const relativePath of GENERATED_RUNTIME_ENTRYPOINTS) {
     rmSync(join(workspacePath, relativePath), { force: true });
   }
   symlinkSync(
@@ -129,7 +132,7 @@ function getPackedPackage(): PackedPackage {
     committedSnapshotCache = join(fixtureRootCache, "committed");
     packDirCache = join(fixtureRootCache, "packed");
     createIsolatedPackWorkspace(packWorkspaceCache, committedSnapshotCache);
-    const startedWithoutGeneratedBundles = [...GENERATED_BRIDGE_FILES].every(
+    const startedWithoutGeneratedBundles = [...GENERATED_RUNTIME_ENTRYPOINTS].every(
       (file) => !existsSync(join(packWorkspaceCache!, file)),
     );
     mkdirSync(packDirCache, { recursive: true });
@@ -219,14 +222,9 @@ describe("npm package bin surface regression", () => {
     const packedFiles = packedPackageFixture.files;
 
     expect(packedFiles.has(CLI_BIN_TARGET)).toBe(true);
-    expect(packedFiles.has("dist/hooks/skill-bridge.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/cli.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/claude-md-coordinator.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/mcp-server.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/runtime-cli.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/team-bridge.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/team-mcp.cjs")).toBe(true);
-    expect(packedFiles.has("bridge/team.js")).toBe(true);
+    for (const relativePath of GENERATED_RUNTIME_ENTRYPOINTS) {
+      expect(packedFiles.has(relativePath), relativePath).toBe(true);
+    }
     expect(packedFiles.has("bridge/gyoshu_bridge.py")).toBe(true);
     expect(packedFiles.has("bridge/run-mcp-server.sh")).toBe(true);
   });
@@ -241,11 +239,97 @@ describe("npm package bin surface regression", () => {
       expect(packedPackageFixture.files.has(relativePath), relativePath).toBe(
         true,
       );
+      if (relativePath.startsWith("dist/") || relativePath.startsWith("bridge/")) continue;
       expect(
         sha256(join(extractedPackageRoot, relativePath)),
         relativePath,
       ).toBe(sha256(join(committedSnapshotCache!, relativePath)));
     }
+  });
+
+  it("typechecks the packed team declaration closure with skipLibCheck disabled", () => {
+    const consumerRoot = join(fixtureRootCache!, "type-consumer");
+    const consumerModules = join(consumerRoot, "node_modules");
+    const packageName = packedPackageFixture.packageJson.name!;
+    mkdirSync(consumerModules, { recursive: true });
+    symlinkSync(
+      packedPackageFixture.extractedPackageRoot,
+      join(consumerModules, packageName),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    symlinkSync(
+      join(PACKAGE_ROOT, "node_modules"),
+      join(packedPackageFixture.extractedPackageRoot, "node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    writeFileSync(join(consumerRoot, "package.json"), JSON.stringify({ type: "module" }));
+    writeFileSync(
+      join(consumerRoot, "index.ts"),
+      `import { recoverDeadWorkerV2 } from ${JSON.stringify(`./node_modules/${packageName}/dist/team/index.js`)};\nvoid recoverDeadWorkerV2;\n`,
+    );
+    writeFileSync(join(consumerRoot, "tsconfig.json"), JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        strict: true,
+        skipLibCheck: false,
+        noEmit: true,
+        types: ["node"],
+        typeRoots: [join(PACKAGE_ROOT, "node_modules", "@types")],
+      },
+      include: ["index.ts"],
+    }));
+
+    expect(() => execFileSync(
+      process.execPath,
+      [join(PACKAGE_ROOT, "node_modules", "typescript", "bin", "tsc"), "-p", join(consumerRoot, "tsconfig.json")],
+      { cwd: consumerRoot, stdio: "pipe" },
+    )).not.toThrow();
+  });
+
+  it("typechecks the supported team export from a clean tarball install", () => {
+    const consumerRoot = join(fixtureRootCache!, "clean-type-consumer");
+    const sourcePackage = readPackageJson();
+    const typescriptVersion = sourcePackage.devDependencies?.typescript;
+    const nodeTypesVersion = sourcePackage.devDependencies?.["@types/node"];
+    if (!typescriptVersion || !nodeTypesVersion) throw new Error("typecheck fixture dependencies missing");
+    mkdirSync(consumerRoot, { recursive: true });
+    writeFileSync(join(consumerRoot, "package.json"), JSON.stringify({ type: "module", private: true }));
+    execFileSync(
+      "npm",
+      [
+        "install",
+        tarballPathCache!,
+        `typescript@${typescriptVersion}`,
+        `@types/node@${nodeTypesVersion}`,
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+      ],
+      { cwd: consumerRoot, stdio: "pipe" },
+    );
+    writeFileSync(
+      join(consumerRoot, "index.ts"),
+      `import { recoverDeadWorkerV2 } from ${JSON.stringify(`${packedPackageFixture.packageJson.name!}/team`)};\nvoid recoverDeadWorkerV2;\n`,
+    );
+    writeFileSync(join(consumerRoot, "tsconfig.json"), JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        strict: true,
+        skipLibCheck: false,
+        noEmit: true,
+      },
+      include: ["index.ts"],
+    }));
+
+    expect(() => execFileSync(
+      process.execPath,
+      [join(consumerRoot, "node_modules", "typescript", "bin", "tsc"), "-p", join(consumerRoot, "tsconfig.json")],
+      { cwd: consumerRoot, stdio: "pipe" },
+    )).not.toThrow();
   });
 
   it("rebuilds recovery CLI surfaces from source without committed bundles", () => {
