@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 vi.mock('fs', async () => {
@@ -55,6 +55,7 @@ function writeMinimallyCompletePluginPayload(pluginRoot) {
     writeFileSync(join(pluginRoot, 'dist', 'hooks', 'skill-bridge.cjs'), 'console.log("skill bridge");\n');
     mkdirSync(join(pluginRoot, 'bridge'), { recursive: true });
     writeFileSync(join(pluginRoot, 'bridge', 'cli.cjs'), 'console.log("bridge");\n');
+    writeFileSync(join(pluginRoot, 'bridge', 'claude-md-coordinator.cjs'), 'console.log("CLAUDE.md coordinator");\n');
     mkdirSync(join(pluginRoot, 'hooks'), { recursive: true });
     writeFileSync(join(pluginRoot, 'hooks', 'hooks.json'), '{}\n');
     mkdirSync(join(pluginRoot, 'commands'), { recursive: true });
@@ -214,6 +215,29 @@ describe('installer bundled + standalone skill sync', () => {
         expect(result.installedSkills).toContain('ralph/SKILL.md');
         expect(readFileSync(join(installedSkillDir, 'SKILL.md'), 'utf-8')).not.toContain('stale content');
         expect(readFileSync(join(installedSkillDir, 'SKILL.md'), 'utf-8')).toContain('name: ralph');
+    });
+    it('reports an existing CLAUDE.md as updated through a symlinked config root', async () => {
+        const canonicalConfigDir = join(tempRoot, 'canonical-claude-config');
+        rmSync(claudeConfigDir, { recursive: true, force: true });
+        mkdirSync(canonicalConfigDir, { recursive: true });
+        writeFileSync(join(canonicalConfigDir, 'CLAUDE.md'), 'existing user content\n');
+        symlinkSync(canonicalConfigDir, claudeConfigDir);
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => { });
+        try {
+            const installer = await loadInstallerWithEnv(claudeConfigDir, homeDir);
+            const result = installer.install({
+                skipClaudeCheck: true,
+                skipHud: true,
+                verbose: true,
+            });
+            expect(result.success).toBe(true);
+            expect(logSpy).toHaveBeenCalledWith('Updated CLAUDE.md (merged with existing content)');
+            expect(logSpy).not.toHaveBeenCalledWith('Created CLAUDE.md');
+            expect(readFileSync(join(canonicalConfigDir, 'CLAUDE.md'), 'utf-8')).toContain('<!-- OMC:START -->');
+        }
+        finally {
+            logSpy.mockRestore();
+        }
     });
 });
 //# sourceMappingURL=installer-omc-reference.test.js.map
