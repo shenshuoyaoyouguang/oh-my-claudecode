@@ -40,3 +40,8 @@ __pycache__/
 Agent.md
 omc/
 tutorial/
+
+# Local working artifacts (design worktrees + test output dumps)
+.workbuddy/
+vitest-hud-all.txt
+vitest-out.txt
