@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { parseTranscript } from "../../hud/transcript.js";
-import { renderTokenUsage } from "../../hud/elements/token-usage.js";
+import {
+  renderTokenUsage,
+  splitTokenUsage,
+} from "../../hud/elements/token-usage.js";
 
 const tempDirs: string[] = [];
 
@@ -156,19 +159,42 @@ describe("HUD transcript token usage plumbing", () => {
 });
 
 describe("HUD token usage rendering", () => {
-  it("formats last-request token usage as plain ASCII input/output counts", () => {
-    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe(
-      "tok:i1.5k/o987",
-    );
+  it("formats last-request token usage with ↑/↓ arrows for input/output", () => {
+    const out = renderTokenUsage({ inputTokens: 1530, outputTokens: 987 });
+    // strip ANSI to assert structure
+    const stripped = out!.replace(/\x1b\[[0-9;]*m/g, "");
+    // ↑ = input (sent to model), ↓ = output (received from model)
+    expect(stripped).toBe("↑1.5k ↓987");
   });
 
-  it("includes reasoning and reliable session totals when available", () => {
-    expect(
-      renderTokenUsage(
-        { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
-        8765,
-      ),
-    ).toBe("tok:i1.5k/o987 r321 s8.8k");
+  it("includes reasoning (magenta r) and session total (cyan s) when available", () => {
+    const out = renderTokenUsage(
+      { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+      8765,
+    );
+    const stripped = out!.replace(/\x1b\[[0-9;]*m/g, "");
+    expect(stripped).toBe("↑1.5k ↓987 r321 s8.8k");
+    // reasoning uses magenta, session uses cyan
+    expect(out).toContain("\x1b[35m");
+    expect(out).toContain("\x1b[36m");
+  });
+
+  it("splits token usage into I/O/S parts for region-aware rendering", () => {
+    const parts = splitTokenUsage(
+      { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
+      8765,
+    );
+    expect(parts).not.toBeNull();
+    const strip = (p: string | null): string =>
+      (p ?? "").replace(/\x1b\[[0-9;]*m/g, "");
+    expect(strip(parts!.input)).toBe("↑1.5k");
+    expect(strip(parts!.output)).toBe("↓987");
+    expect(strip(parts!.reasoning)).toBe("r321");
+    expect(strip(parts!.session)).toBe("s8.8k");
+  });
+
+  it("returns null from splitTokenUsage when no usage is available", () => {
+    expect(splitTokenUsage(null)).toBeNull();
   });
 
   it("returns null when no last-request token usage is available", () => {

@@ -101,7 +101,7 @@ describe('render - enterprise cost branch', () => {
     expect(plain).toContain('spent:$3,323.93');
   });
 
-  it('does NOT render tok: when enterprise cost renders successfully', async () => {
+  it('does NOT render token usage when enterprise cost renders successfully', async () => {
     const context = createContext({
       subscriptionType: 'enterprise',
       rateLimitsResult: {
@@ -117,7 +117,8 @@ describe('render - enterprise cost branch', () => {
     const config = createConfig({ showTokens: true, showEnterpriseCost: true });
     const output = await render(context, config);
     const plain = strip(output);
-    expect(plain).not.toContain('tok:');
+    expect(plain).not.toContain('↑');
+    expect(plain).not.toContain('↓');
     expect(plain).toContain('spent:');
   });
 
@@ -151,8 +152,8 @@ describe('render - enterprise cost branch', () => {
     const config = createConfig({ showTokens: true, showEnterpriseCost: true });
     const output = await render(context, config);
     const plain = strip(output);
-    // No cost data available → fall back to tokens
-    expect(plain).toContain('tok:');
+    // No cost data available → fall back to tokens (↑ input, ↓ output)
+    expect(plain).toContain('↑1.2k ↓340');
   });
 
   it('does not render enterprise cost when showEnterpriseCost is false', async () => {
@@ -241,7 +242,7 @@ describe('render - enterprise cost branch', () => {
     const config = createConfig({ showTokens: true, showEnterpriseCost: true });
     const output = await render(context, config);
     const plain = strip(output);
-    expect(plain).toContain('tok:');
+    expect(plain).toContain('↑1.2k ↓340');
     expect(plain).not.toContain('spent:');
   });
 });

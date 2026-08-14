@@ -487,6 +487,12 @@ export interface HudLabels {
   untracked: string;
   ahead: string;
   behind: string;
+  /** I/O/S region tag label (Input / 输入) — used when ioGrouping is enabled */
+  input: string;
+  /** I/O/S region tag label (Output / 输出) — used when ioGrouping is enabled */
+  output: string;
+  /** I/O/S region tag label (Status / 状态) — used when ioGrouping is enabled */
+  status: string;
 }
 
 export const DEFAULT_HUD_LABELS: HudLabels = {
@@ -504,6 +510,9 @@ export const DEFAULT_HUD_LABELS: HudLabels = {
   untracked: '?',
   ahead: '⇡',
   behind: '⇣',
+  input: 'I',
+  output: 'O',
+  status: 'S',
 };
 
 export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
@@ -523,6 +532,9 @@ export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
     untracked: '未跟踪',
     ahead: '领先',
     behind: '落后',
+    input: '输入',
+    output: '输出',
+    status: '状态',
   },
 };
 
@@ -595,7 +607,11 @@ export interface HudElementConfig {
   sessionHealth: boolean;     // Show session health/duration
   showSessionDuration?: boolean;  // Show session:19m duration display (default: true if sessionHealth is true)
   showHealthIndicator?: boolean;  // Show 🟢/🟡/🔴 health indicator (default: true if sessionHealth is true)
-  showTokens?: boolean;           // Show last-request token usage when enabled (tok:i1.2k/o340)
+  showTokens?: boolean;           // Show last-request token usage when enabled (↑in ↓out r s)
+  ioGrouping?: boolean;           // Split the main statusline into I/O/S (Input/Output/Status) regions
+                                  // with dimmed region tags. When enabled, elements and token parts are
+                                  // grouped by region: Input (context + token input), Output (token
+                                  // output + reasoning + model activity), Status (everything else).
   enterpriseMode?: boolean;       // Explicit override for enterprise mode (undefined = auto-detect)
   showEnterpriseCost?: boolean;   // Whether to render enterprise billing cost (default: true when enterprise)
   useBars: boolean;           // Show visual progress bars instead of/alongside percentages
@@ -659,6 +675,40 @@ export const DEFAULT_ELEMENT_ORDER: Required<LayoutConfig> = {
     'callCounts', 'lastTool', 'sessionSummary',
   ],
   detail: ['missionBoard', 'agents', 'contextWarning', 'payloadWarning', 'todos'],
+};
+
+/** I/O/S region tags used when ioGrouping groups the main statusline. */
+export type HudRegionGroup = 'I' | 'O' | 'S';
+
+/**
+ * Element → I/O/S region assignment for ioGrouping.
+ * - I (Input / 输入): what feeds the model — context window + token input.
+ * - O (Output / 输出): what the model produces — token output/reasoning + activity.
+ * - S (Status / 状态): operational state — model, limits, session, counts, etc.
+ *
+ * `omcLabel` (rendered as an untagged leading brand prefix) and `tokens`
+ * (split across regions) are intentionally absent here.
+ */
+export const DEFAULT_REGION_MAP: Record<string, HudRegionGroup> = {
+  contextBar: 'I',
+  thinking: 'O',
+  agents: 'O',
+  lastTool: 'O',
+  lastSkill: 'O',
+  model: 'S',
+  enterpriseCost: 'S',
+  rateLimits: 'S',
+  customBuckets: 'S',
+  permission: 'S',
+  promptTime: 'S',
+  session: 'S',
+  ralph: 'S',
+  autopilot: 'S',
+  prd: 'S',
+  skills: 'S',
+  background: 'S',
+  callCounts: 'S',
+  sessionSummary: 'S',
 };
 
 export interface HudConfig {
@@ -728,7 +778,8 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
+    ioGrouping: false,  // Disabled in the raw default (presets opt in per their density)
     useBars: false,  // Disabled by default for backwards compatibility
     showCallCounts: true,  // Show tool/agent/skill call counts by default (Issue #710)
     callCountsFormat: 'auto',  // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
@@ -776,6 +827,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     agents: true,
     agentsFormat: 'count',
     agentsMaxLines: 0,
+    ioGrouping: false, // Compact single line — grouping disabled
     backgroundTasks: false,
     todos: true,
     permissionStatus: false,
@@ -789,7 +841,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     sessionHealth: false,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
     useBars: false,
     showCallCounts: false,
     showLastTool: false,
@@ -819,6 +871,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     agents: true,
     agentsFormat: 'multiline',
     agentsMaxLines: 3,
+    ioGrouping: true, // Grouped into I/O/S regions (default preset)
     backgroundTasks: true,
     todos: true,
     permissionStatus: false,
@@ -832,7 +885,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
     useBars: true,
     showCallCounts: true,
     showLastTool: false,
@@ -862,6 +915,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     agents: true,
     agentsFormat: 'multiline',
     agentsMaxLines: 10,
+    ioGrouping: true, // Grouped into I/O/S regions
     backgroundTasks: true,
     todos: true,
     permissionStatus: false,
@@ -875,7 +929,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
     useBars: true,
     showCallCounts: true,
     showLastTool: false,
@@ -905,6 +959,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     agents: true,
     agentsFormat: 'codes',
     agentsMaxLines: 0,
+    ioGrouping: false, // Compact codes line — grouping disabled
     backgroundTasks: false,
     todos: true,
     permissionStatus: false,
@@ -918,7 +973,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
     useBars: false,
     showCallCounts: true,
     showLastTool: false,
@@ -948,6 +1003,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     agents: true,
     agentsFormat: 'multiline',
     agentsMaxLines: 5,
+    ioGrouping: true, // Grouped into I/O/S regions
     backgroundTasks: true,
     todos: true,
     permissionStatus: false,
@@ -961,7 +1017,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
-    showTokens: false,
+    showTokens: true,
     useBars: true,
     showCallCounts: true,
     showLastTool: false,

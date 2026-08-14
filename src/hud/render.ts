@@ -4,8 +4,18 @@
  * Composes statusline output from render context.
  */
 
-import type { HudRenderContext, HudConfig, LayoutConfig } from "./types.js";
-import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
+import type {
+  HudRenderContext,
+  HudConfig,
+  LayoutConfig,
+  HudRegionGroup,
+} from "./types.js";
+import {
+  DEFAULT_HUD_CONFIG,
+  DEFAULT_ELEMENT_ORDER,
+  DEFAULT_HUD_LABELS,
+  DEFAULT_REGION_MAP,
+} from "./types.js";
 import { bold, dim } from "./colors.js";
 import { isRuntimePackageLocal } from "../lib/version.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
@@ -29,7 +39,11 @@ import {
 import { renderPermission } from "./elements/permission.js";
 import { renderThinking } from "./elements/thinking.js";
 import { renderSession } from "./elements/session.js";
-import { renderTokenUsage } from "./elements/token-usage.js";
+import {
+  joinTokenParts,
+  splitTokenUsage,
+  type TokenUsageParts,
+} from "./elements/token-usage.js";
 import { renderEnterpriseCost } from "./elements/enterprise-cost.js";
 import { renderPromptTime } from "./elements/prompt-time.js";
 import { renderAutopilot } from "./elements/autopilot.js";
@@ -129,6 +143,9 @@ const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 
 const PLAIN_SEPARATOR = " | ";
 const DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+
+/** I/O/S region display order for ioGrouping (Input → Output → Status). */
+const REGION_ORDER: readonly HudRegionGroup[] = ['I', 'O', 'S'];
 
 function buildMainElementOrder(elementOrder: string[] | undefined): string[] {
   if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
@@ -309,6 +326,11 @@ export async function render(
   const { elements: enabledElements } = config;
   const hudLabels = config.labels ?? DEFAULT_HUD_LABELS;
 
+  const enableGrouping = config.elements.ioGrouping ?? false;
+  // Token parts computed once and either joined into the single "tokens"
+  // element (grouping off) or distributed across I/O/S regions (grouping on).
+  let tokenParts: TokenUsageParts | null = null;
+
   // ── Render all elements into maps ──────────────────────────────────
   // Each element is rendered independently and stored by name.
   // The layout (or DEFAULT_ELEMENT_ORDER) determines final ordering.
@@ -482,20 +504,24 @@ export async function render(
       rendered.set("enterpriseCost", cost);
     } else if (enabledElements.showTokens === true) {
       // Enterprise but no cost data — fall back to token usage
-      const tokenUsage = renderTokenUsage(
+      tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
         hudLabels,
       );
-      if (tokenUsage) rendered.set("tokens", tokenUsage);
+      if (tokenParts && !enableGrouping) {
+        rendered.set("tokens", joinTokenParts(tokenParts));
+      }
     }
   } else if (enabledElements.showTokens === true) {
-    const tokenUsage = renderTokenUsage(
+    tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
       hudLabels,
     );
-    if (tokenUsage) rendered.set("tokens", tokenUsage);
+    if (tokenParts && !enableGrouping) {
+      rendered.set("tokens", joinTokenParts(tokenParts));
+    }
   }
 
   if (enabledElements.ralph && context.ralph) {
@@ -644,6 +670,59 @@ export async function render(
     return result;
   }
 
+  /** Collect inline elements grouped into I/O/S regions (ioGrouping enabled).
+   *  Each element is bucketed by DEFAULT_REGION_MAP (falling back to Status),
+   *  `tokens` is split so ↑input lands in I, ↓output+r in O, and sSession in S,
+   *  and `omcLabel` stays an untagged leading brand prefix. A dimmed region tag
+   *  is prefixed to the first content of each non-empty region. */
+  function collectInlineWithRegions(order: string[]): string[] {
+    const regions: Record<HudRegionGroup, string[]> = { I: [], O: [], S: [] };
+    const prefix: string[] = [];
+    const regionLabels: Record<HudRegionGroup, string> = {
+      I: hudLabels.input,
+      O: hudLabels.output,
+      S: hudLabels.status,
+    };
+
+    for (const name of order) {
+      if (name === 'omcLabel') {
+        const el = rendered.get(name);
+        if (el) prefix.push(el);
+        continue;
+      }
+      if (name === 'tokens') {
+        if (!tokenParts) continue;
+        regions.I.push(tokenParts.input);
+        const output = [tokenParts.output, tokenParts.reasoning]
+          .filter((p): p is string => p !== null)
+          .join(' ');
+        if (output) regions.O.push(output);
+        if (tokenParts.session) regions.S.push(tokenParts.session);
+        continue;
+      }
+
+      let el = rendered.get(name);
+      if (!el) {
+        // Detail elements moved to an inline group render as joined inline
+        const lines = renderedDetail.get(name);
+        if (lines && lines.length > 0) el = lines.join(' ');
+      }
+      if (el) {
+        regions[DEFAULT_REGION_MAP[name] ?? 'S'].push(el);
+      }
+    }
+
+    const segments: string[] = [...prefix];
+    for (const group of REGION_ORDER) {
+      const els = regions[group];
+      if (els.length === 0) continue;
+      segments.push(`${dim(`${regionLabels[group]}: `)}${els.join(DIM_SEPARATOR)}`);
+    }
+    // Return a single joined line (or an empty array) so the caller's
+    // array contract (`elements.join(...)`) is preserved.
+    return segments.length > 0 ? [segments.join(DIM_SEPARATOR)] : [];
+  }
+
   /** Collect detail lines in layout order.
    *  Also picks up inline elements moved to the detail group —
    *  they become individual detail lines when placed here. */
@@ -662,7 +741,9 @@ export async function render(
   }
 
   const gitElements = collectInline(effectiveLayout.line1);
-  const elements = collectInline(effectiveLayout.main);
+  const elements = enableGrouping
+    ? collectInlineWithRegions(effectiveLayout.main)
+    : collectInline(effectiveLayout.main);
 
   // Detail lines from the detail group layout order.
   // Elements like 'agents' appear in both main (inline) and detail (detail lines),

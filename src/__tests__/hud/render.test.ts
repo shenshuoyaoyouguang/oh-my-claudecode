@@ -538,14 +538,64 @@ describe('token usage rendering', () => {
 
   it('shows last-request token usage when enabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(true));
+    const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
 
-    expect(result).toContain('tok:i1.3k/o340 r120 s6.6k');
+    // ↑ = input, ↓ = output, r = reasoning, s = session total
+    expect(plain).toContain('↑1.3k ↓340 r120 s6.6k');
   });
 
   it('omits last-request token usage when explicitly disabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(false));
+    const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
 
-    expect(result).not.toContain('tok:');
+    expect(plain).not.toContain('↑1.3k');
+    expect(plain).not.toContain('s6.6k');
+  });
+
+  it('groups token parts into I/O/S regions when ioGrouping is enabled', async () => {
+    const config = createTokenConfig(true);
+    config.elements.ioGrouping = true;
+    const result = await render(createTokenContext(), config);
+    const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
+
+    expect(plain).toContain('I:');
+    expect(plain).toContain('O:');
+    expect(plain).toContain('S:');
+
+    // Region order is Input → Output → Status:
+    // input token in I, output+reasoning in O, session total in S.
+    const iIdx = plain.indexOf('I:');
+    const oIdx = plain.indexOf('O:');
+    const sIdx = plain.indexOf('S:');
+    const inputIdx = plain.indexOf('↑1.3k');
+    const outputIdx = plain.indexOf('↓340 r120');
+    const sessionIdx = plain.indexOf('s6.6k');
+    expect(inputIdx).toBeGreaterThan(iIdx);
+    expect(inputIdx).toBeLessThan(oIdx);
+    expect(outputIdx).toBeGreaterThan(oIdx);
+    expect(outputIdx).toBeLessThan(sIdx);
+    expect(sessionIdx).toBeGreaterThan(sIdx);
+  });
+
+  it('buckets elements by region map even when a custom layout mixes regions', async () => {
+    const config = createTokenConfig(true);
+    config.elements.ioGrouping = true;
+    config.elements.contextBar = true;
+    config.layout = {
+      line1: [],
+      main: ['model', 'tokens', 'contextBar'],
+      detail: [],
+    };
+    const result = await render(createTokenContext(), config);
+    const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
+
+    // contextBar is bound to I and model to S regardless of layout position;
+    // token parts still split across I/O/S.
+    expect(plain.indexOf('ctx:30%')).toBeGreaterThan(plain.indexOf('I:'));
+    expect(plain.indexOf('ctx:30%')).toBeLessThan(plain.indexOf('O:'));
+    expect(plain).toContain('O:');
+    expect(plain).toContain('↓340 r120');
+    expect(plain.indexOf('Model: Sonnet 4.5')).toBeGreaterThan(plain.indexOf('S:'));
   });
 });
 

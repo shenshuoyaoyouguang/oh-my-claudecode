@@ -147,9 +147,25 @@ When agents are running, the HUD shows detailed information on separate lines:
 | `ultrawork` | Active mode badge |
 | `skill:name` | Last activated skill (cyan) |
 | `ctx:67%` | Context window usage |
+| `↑1.2k ↓340 r100 s199k` | Token usage: ↑ input / ↓ output (dim), r reasoning (magenta), s session total (cyan) |
 | `agents:2` | Running subagent count |
 | `bg:3/5` | Background task slots |
 | `todos:2/5` | Todo completion |
+
+## Region Grouping (I/O/S)
+
+When the `ioGrouping` element flag is enabled (default in the `focused`, `full`, and `dense` presets), the main statusline is divided into three labeled regions so you can scan by category:
+
+- **`I:` (Input / 输入)** — what feeds the model: context window usage (`ctx:67%`) and the last-request input tokens (`↑1.5k`)
+- **`O:` (Output / 输出)** — what the model produced: output tokens (`↓987`) and reasoning (`r120`), plus active model activity (thinking, agents, last tool/skill)
+- **`S:` (Status / 状态)** — operational state: model name, rate limits/cost, session health, loop/mode badges, call counts, and the session token total (`s6.6k`)
+
+Grouped example:
+```
+[OMC] I: ctx:67% | ↑1.5k | O: ↓987 r120 | agents:2 | S: Model: Sonnet 4.5 | 5h:45% | session:45m | s10k | T:5 A:3 S:2
+```
+
+The `minimal` and `opencode` presets keep `ioGrouping` off (`false`) for a compact single line. Override with `elements.ioGrouping` (`true`/`false`).
 
 ## Color Coding
 

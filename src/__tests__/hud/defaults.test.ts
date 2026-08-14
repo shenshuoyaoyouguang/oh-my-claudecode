@@ -37,8 +37,8 @@ describe('HUD Default Configuration', () => {
       expect(DEFAULT_HUD_CONFIG.elements.showSessionDuration).toBe(true);
     });
 
-    it('should keep token usage display optional by default', () => {
-      expect(DEFAULT_HUD_CONFIG.elements.showTokens).toBe(false);
+    it('should enable token usage display by default', () => {
+      expect(DEFAULT_HUD_CONFIG.elements.showTokens).toBe(true);
     });
   });
 
@@ -80,10 +80,25 @@ describe('HUD Default Configuration', () => {
       expect(PRESET_CONFIGS.minimal.gitBranch).toBe(false);
     });
 
-    it('should keep token usage display disabled in all presets', () => {
+    it('should enable token usage display in all presets', () => {
       presets.forEach(preset => {
-        expect(PRESET_CONFIGS[preset].showTokens).toBe(false);
+        expect(PRESET_CONFIGS[preset].showTokens).toBe(true);
       });
+    });
+
+    it('should enable ioGrouping in focused, full, and dense presets', () => {
+      expect(PRESET_CONFIGS.focused.ioGrouping).toBe(true);
+      expect(PRESET_CONFIGS.full.ioGrouping).toBe(true);
+      expect(PRESET_CONFIGS.dense.ioGrouping).toBe(true);
+    });
+
+    it('should disable ioGrouping in minimal and opencode presets to stay compact', () => {
+      expect(PRESET_CONFIGS.minimal.ioGrouping).toBe(false);
+      expect(PRESET_CONFIGS.opencode.ioGrouping).toBe(false);
+    });
+
+    it('should keep ioGrouping off in the raw default config', () => {
+      expect(DEFAULT_HUD_CONFIG.elements.ioGrouping).toBe(false);
     });
   });
 });

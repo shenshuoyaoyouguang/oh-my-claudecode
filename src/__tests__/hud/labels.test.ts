@@ -124,8 +124,12 @@ describe('HUD labels', () => {
 
   it('keeps default HUD labels unchanged for direct renderer calls', () => {
     expect(stripAnsi(renderContext(67, DEFAULT_HUD_CONFIG.thresholds, 'labels-default') ?? '')).toBe('ctx:67%');
-    expect(renderTokenUsage({ inputTokens: 1530, outputTokens: 987 })).toBe('tok:i1.5k/o987');
+    const tokenOut = renderTokenUsage({ inputTokens: 1530, outputTokens: 987 });
+    expect(stripAnsi(tokenOut ?? '')).toBe('↑1.5k ↓987');
     expect(renderCallCounts(5, 3, 2, 'ascii')).toBe('T:5 A:3 S:2');
+    expect(DEFAULT_HUD_LABELS.input).toBe('I');
+    expect(DEFAULT_HUD_LABELS.output).toBe('O');
+    expect(DEFAULT_HUD_LABELS.status).toBe('S');
   });
 
   it('resolves zh-CN locale labels and lets explicit labels override locale', () => {
@@ -140,6 +144,9 @@ describe('HUD labels', () => {
     expect(labels.agent).toBe('智能体');
     expect(labels.tokens).toBe('令牌');
     expect(labels.model).toBe('模型');
+    expect(labels.input).toBe('输入');
+    expect(labels.output).toBe('输出');
+    expect(labels.status).toBe('状态');
     expect('unknown' in labels).toBe(false);
   });
 
@@ -169,11 +176,28 @@ describe('HUD labels', () => {
     const output = stripAnsi(await render(createContext(), createConfig(labels)));
 
     expect(output).toContain('思考');
-    expect(output).toContain('令牌:i1.5k/o987');
+    expect(output).toContain('↑1.5k ↓987');
     expect(output).toContain('循环:3/10');
     expect(output).toContain('上下文:67%');
     expect(output).toContain('后台:1/5');
     expect(output).toContain('工具:5 智能体:3 技能:2');
     expect(output).toContain('模型: Sonnet 4.5');
+  });
+
+  it('renders localized I/O/S region tags when ioGrouping is enabled', async () => {
+    const labels = resolveHudLabels('zh-CN');
+    const config = createConfig(labels);
+    config.elements.ioGrouping = true;
+    const output = stripAnsi(await render(createContext(), config));
+
+    expect(output).toContain('输入:');
+    expect(output).toContain('输出:');
+    expect(output).toContain('状态:');
+    // token parts are split: ↑input under 输入, ↓output under 输出
+    expect(output.indexOf('↑1.5k')).toBeGreaterThan(output.indexOf('输入:'));
+    expect(output.indexOf('↑1.5k')).toBeLessThan(output.indexOf('输出:'));
+    expect(output.indexOf('↓987')).toBeGreaterThan(output.indexOf('输出:'));
+    expect(output.indexOf('↓987')).toBeLessThan(output.indexOf('状态:'));
+    expect(output).toContain('循环:3/10');
   });
 });
