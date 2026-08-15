@@ -26,6 +26,17 @@ const HUD_SRC_DIR = join(__dirname, '..', '..', 'hud');
 const PROJECT_ROOT = join(__dirname, '..', '..', '..');
 
 /**
+ * 平台感知性能阈值(环境基线,非代码缺陷):
+ * Windows 上 ESM 编译、文件 I/O 与全量测试资源竞争显著更慢,
+ * 曾多次误报(import index.ts 11.4s>5s、state.ts 6.4s>5s、readHudState 2.4s>2s)。
+ * 这些断言的目的是防循环依赖挂起与无限递归,而非压测 Windows 加载性能,
+ * 故 Windows 统一放宽 10s,其余平台保持原值。
+ */
+function perfThresholdMs(ms: number): number {
+  return process.platform === 'win32' ? ms + 10_000 : ms;
+}
+
+/**
  * 读取 HUD 模块下指定文件的源码,解析其 import 语句。
  * 仅识别相对路径导入(./ 或 ../),忽略 type-only 导入以聚焦运行时循环。
  */
@@ -180,7 +191,7 @@ describe('HUD circular dependency', () => {
       const module = await import('../../hud/state.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(5000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(5000));
       expect(module.readHudState).toBeDefined();
       expect(module.writeHudState).toBeDefined();
       expect(module.initializeHUDState).toBeDefined();
@@ -191,7 +202,7 @@ describe('HUD circular dependency', () => {
       const module = await import('../../hud/background-cleanup.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(5000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(5000));
       expect(module.cleanupStaleBackgroundTasks).toBeDefined();
       expect(module.markOrphanedTasksAsStale).toBeDefined();
     });
@@ -201,7 +212,7 @@ describe('HUD circular dependency', () => {
       const module = await import('../../hud/render.js');
       const elapsed = Date.now() - start;
 
-      expect(elapsed).toBeLessThan(5000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(5000));
       expect(module.render).toBeDefined();
       expect(typeof module.render).toBe('function');
     });
@@ -213,7 +224,7 @@ describe('HUD circular dependency', () => {
       const start = Date.now();
       await expect(import('../../hud/index.js')).resolves.toBeDefined();
       const elapsed = Date.now() - start;
-      expect(elapsed).toBeLessThan(5000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(5000));
     });
   });
 
@@ -276,7 +287,7 @@ describe('HUD circular dependency', () => {
 
       expect(typeof output).toBe('string');
       // 阈值 3 秒:Windows 上全量测试资源竞争下需要更宽松的阈值
-      expect(elapsed).toBeLessThan(3000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(3000));
     });
   });
 });
@@ -349,7 +360,7 @@ describe('HUD recursion safety', () => {
       const elapsed = Date.now() - start;
 
       expect(typeof output).toBe('string');
-      expect(elapsed).toBeLessThan(1000);
+      expect(elapsed).toBeLessThan(perfThresholdMs(1000));
     });
   });
 
@@ -370,7 +381,7 @@ describe('HUD recursion safety', () => {
         const elapsed = Date.now() - start;
 
         // 阈值 2 秒:Windows 上文件 I/O 较慢
-        expect(elapsed).toBeLessThan(2000);
+        expect(elapsed).toBeLessThan(perfThresholdMs(2000));
         // 结果只能是 null 或带 backgroundTasks 的对象
         expect(result === null || (result && Array.isArray(result.backgroundTasks))).toBe(true);
       } finally {
@@ -394,7 +405,7 @@ describe('HUD recursion safety', () => {
         ).resolves.toBeUndefined();
         const elapsed = Date.now() - start;
         // 阈值 5 秒:Windows 上文件 I/O + 动态 import 较慢
-        expect(elapsed).toBeLessThan(5000);
+        expect(elapsed).toBeLessThan(perfThresholdMs(5000));
       } finally {
         rmSync(tmpRoot, { recursive: true, force: true });
       }
