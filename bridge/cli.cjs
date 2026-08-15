@@ -54652,17 +54652,23 @@ function getTotalTokens(stdin) {
   const usage = getCurrentUsage(stdin);
   return (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0);
 }
-function getCacheUsage(stdin) {
+function getCacheUsage(stdin, previousStdin) {
   const usage = getCurrentUsage(stdin);
-  if (!usage) return null;
-  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  if (cacheCreation <= 0 && cacheRead <= 0) return null;
-  return {
-    inputTokens: usage.input_tokens ?? 0,
-    cacheCreationInputTokens: cacheCreation,
-    cacheReadInputTokens: cacheRead
-  };
+  if (usage) {
+    const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+    const cacheRead = usage.cache_read_input_tokens ?? 0;
+    if (cacheCreation > 0 || cacheRead > 0) {
+      return {
+        inputTokens: usage.input_tokens ?? 0,
+        cacheCreationInputTokens: cacheCreation,
+        cacheReadInputTokens: cacheRead
+      };
+    }
+  }
+  if (previousStdin && isSameContextStream(stdin, previousStdin)) {
+    return getCacheUsage(previousStdin);
+  }
+  return null;
 }
 function getTotalInputTokens(stdin) {
   return stdin.context_window?.total_input_tokens ?? 0;
@@ -58242,7 +58248,7 @@ async function main2(watchMode = false, skipInit = false) {
       ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
-      cacheUsage: getCacheUsage(stdin),
+      cacheUsage: getCacheUsage(stdin, previousStdinCache),
       omcVersion,
       updateAvailable,
       toolCallCount: transcriptData.toolCallCount,

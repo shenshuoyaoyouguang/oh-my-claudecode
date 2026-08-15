@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import type { StatuslineStdin } from '../../hud/types.js';
 import {
   getContextPercent,
+  getCacheUsage,
   getModelId,
   getModelName,
   getRateLimitsFromStdin,
@@ -669,5 +670,91 @@ describe('readStdinCache — env-less reader fallback to most recent session cac
       JSON.stringify(makeStdin({ transcript_path: '/tmp/mine.jsonl' })),
     );
     expect(readStdinCache()?.transcript_path).toBe('/tmp/mine.jsonl');
+  });
+});
+
+describe('getCacheUsage stabilization', () => {
+  it('returns current cache data when present', () => {
+    const stdin = makeStdin({
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 1000,
+          cache_creation_input_tokens: 2000,
+          cache_read_input_tokens: 7000,
+        },
+      },
+    });
+    const result = getCacheUsage(stdin);
+    expect(result).not.toBeNull();
+    expect(result!.cacheReadInputTokens).toBe(7000);
+  });
+
+  it('falls back to previousStdin when current request has no cache activity (same context stream)', () => {
+    const previous = makeStdin({
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 1000,
+          cache_creation_input_tokens: 2000,
+          cache_read_input_tokens: 7000,
+        },
+      },
+    });
+    const current = makeStdin({
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 500,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    });
+    // 同一 context stream（相同 cwd, transcript_path, context_window_size）
+    const result = getCacheUsage(current, previous);
+    expect(result).not.toBeNull();
+    expect(result!.cacheReadInputTokens).toBe(7000);
+  });
+
+  it('returns null when context stream changed (different transcript_path)', () => {
+    const previous = makeStdin({
+      transcript_path: '/tmp/old.jsonl',
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 1000,
+          cache_creation_input_tokens: 2000,
+          cache_read_input_tokens: 7000,
+        },
+      },
+    });
+    const current = makeStdin({
+      transcript_path: '/tmp/new.jsonl',
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 500,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    });
+    expect(getCacheUsage(current, previous)).toBeNull();
+  });
+
+  it('returns null when no previousStdin and no current cache activity', () => {
+    const current = makeStdin({
+      context_window: {
+        context_window_size: 1000,
+        current_usage: {
+          input_tokens: 500,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    });
+    expect(getCacheUsage(current)).toBeNull();
+    expect(getCacheUsage(current, null)).toBeNull();
   });
 });

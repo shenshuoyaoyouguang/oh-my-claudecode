@@ -255,18 +255,34 @@ function getTotalTokens(stdin: StatuslineStdin): number {
 /**
  * Extract cache token usage from stdin context_window.current_usage.
  * Used by the cache-rate element; returns null when no cache data is present.
+ *
+ * `current_usage` is per-request (transient): a request with no cache activity
+ * yields cache_creation=0 && cache_read=0, which would make the element flicker.
+ * The optional `previousStdin` snapshot stabilises the display — when the
+ * current request has no cache activity but the previous snapshot (same context
+ * stream) did, we reuse the previous values. Mirrors stabilizeContextPercent.
  */
-export function getCacheUsage(stdin: StatuslineStdin): CacheUsage | null {
+export function getCacheUsage(
+  stdin: StatuslineStdin,
+  previousStdin?: StatuslineStdin | null,
+): CacheUsage | null {
   const usage = getCurrentUsage(stdin);
-  if (!usage) return null;
-  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
-  const cacheRead = usage.cache_read_input_tokens ?? 0;
-  if (cacheCreation <= 0 && cacheRead <= 0) return null;
-  return {
-    inputTokens: usage.input_tokens ?? 0,
-    cacheCreationInputTokens: cacheCreation,
-    cacheReadInputTokens: cacheRead,
-  };
+  if (usage) {
+    const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+    const cacheRead = usage.cache_read_input_tokens ?? 0;
+    if (cacheCreation > 0 || cacheRead > 0) {
+      return {
+        inputTokens: usage.input_tokens ?? 0,
+        cacheCreationInputTokens: cacheCreation,
+        cacheReadInputTokens: cacheRead,
+      };
+    }
+  }
+  // 当前请求无缓存活动，回退到上次快照（仅限同一 context stream，防止闪烁）
+  if (previousStdin && isSameContextStream(stdin, previousStdin)) {
+    return getCacheUsage(previousStdin);
+  }
+  return null;
 }
 
 function getTotalInputTokens(stdin: StatuslineStdin): number {

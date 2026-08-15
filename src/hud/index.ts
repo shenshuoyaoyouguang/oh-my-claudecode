@@ -523,7 +523,7 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
-      cacheUsage: getCacheUsage(stdin),
+      cacheUsage: getCacheUsage(stdin, previousStdinCache),
       omcVersion,
       updateAvailable,
       toolCallCount: transcriptData.toolCallCount,
