@@ -21,6 +21,9 @@ const CYAN = '\x1b[36m';
 const MAGENTA = '\x1b[35m';
 const YELLOW = '\x1b[33m';
 const GREEN = '\x1b[32m';
+const BRIGHT_BLUE = '\x1b[94m';
+const BLUE = '\x1b[34m';
+const WHITE = '\x1b[37m';
 
 // Helper to create mock agents
 function createAgent(
@@ -161,7 +164,7 @@ describe('Agents Element', () => {
       ];
       const result = renderAgentsCodedWithDuration(agents);
       const stripped = result!.replace(/\x1b\[[0-9;]*m/g, '');
-      expect(stripped).toMatch(/agents:A!/);
+      expect(stripped).toMatch(/agents:A⏱/);
     });
   });
 
@@ -333,36 +336,36 @@ describe('Agents Element', () => {
   });
 
   describe('Model tier color coding', () => {
-    it('should use magenta for opus tier', () => {
+    it('should use bright blue for opus tier', () => {
       const agents: ActiveAgent[] = [
         createAgent('oh-my-claudecode:architect', 'opus'),
       ];
       const result = renderAgentsCoded(agents);
-      expect(result).toContain(MAGENTA);
+      expect(result).toContain(BRIGHT_BLUE);
     });
 
-    it('should use yellow for sonnet tier', () => {
+    it('should use blue for sonnet tier', () => {
       const agents: ActiveAgent[] = [
         createAgent('oh-my-claudecode:executor', 'sonnet'),
       ];
       const result = renderAgentsCoded(agents);
-      expect(result).toContain(YELLOW);
+      expect(result).toContain(BLUE);
     });
 
-    it('should use green for haiku tier', () => {
+    it('should use cyan for haiku tier', () => {
       const agents: ActiveAgent[] = [
         createAgent('oh-my-claudecode:explore', 'haiku'),
       ];
       const result = renderAgentsCoded(agents);
-      expect(result).toContain(GREEN);
+      expect(result).toContain(CYAN);
     });
 
-    it('should use cyan for unknown model', () => {
+    it('should use white for unknown model', () => {
       const agents: ActiveAgent[] = [
         createAgent('oh-my-claudecode:architect'),
       ];
       const result = renderAgentsCoded(agents);
-      expect(result).toContain(CYAN);
+      expect(result).toContain(WHITE);
     });
   });
 

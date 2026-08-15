@@ -94,6 +94,7 @@ describe('HUD watch mode initialization', () => {
         };
       }),
       stabilizeContextPercent: vi.fn((value) => value),
+      getCacheUsage: vi.fn(() => null),
     }));
 
     vi.doMock('../../hud/transcript.js', () => ({

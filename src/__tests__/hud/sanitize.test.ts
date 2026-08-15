@@ -122,8 +122,9 @@ describe('replaceUnicodeBlocks', () => {
   it('should replace ambiguous arrows with ASCII (B-2)', () => {
     expect(replaceUnicodeBlocks('⇡')).toBe('^');
     expect(replaceUnicodeBlocks('⇣')).toBe('v');
-    expect(replaceUnicodeBlocks('↑')).toBe('^');
-    expect(replaceUnicodeBlocks('↓')).toBe('v');
+    // ↑/↓ mappings were removed (token usage no longer renders arrow glyphs)
+    expect(replaceUnicodeBlocks('↑')).toBe('↑');
+    expect(replaceUnicodeBlocks('↓')).toBe('↓');
   });
 });
 

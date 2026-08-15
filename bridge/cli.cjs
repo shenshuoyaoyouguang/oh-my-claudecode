@@ -20119,7 +20119,15 @@ var init_types6 = __esm({
       behind: "\u21E3",
       input: "I",
       output: "O",
-      status: "S"
+      status: "S",
+      session: "session",
+      reasoning: "r",
+      sessionTotal: "tot",
+      usage: "usage",
+      multiRepo: "mr",
+      criticalSuffix: " CRITICAL",
+      compactSuffix: "! compact",
+      cache: "cache"
     };
     HUD_LOCALE_LABELS = {
       en: DEFAULT_HUD_LABELS,
@@ -20140,7 +20148,15 @@ var init_types6 = __esm({
         behind: "\u843D\u540E",
         input: "\u8F93\u5165",
         output: "\u8F93\u51FA",
-        status: "\u72B6\u6001"
+        status: "\u72B6\u6001",
+        session: "\u4F1A\u8BDD",
+        reasoning: "\u63A8\u7406",
+        sessionTotal: "\u7D2F\u8BA1",
+        usage: "\u7528\u91CF",
+        multiRepo: "\u591A\u4ED3",
+        criticalSuffix: " \u4E34\u754C",
+        compactSuffix: "! \u538B\u7F29",
+        cache: "\u7F13\u5B58"
       }
     };
     HUD_LABEL_KEYS = Object.freeze(
@@ -20150,6 +20166,7 @@ var init_types6 = __esm({
       line1: ["hostname", "cwd", "gitRepo", "gitBranch", "gitStatus", "apiKeySource", "profile"],
       main: [
         "omcLabel",
+        "cacheRate",
         "model",
         "enterpriseCost",
         "rateLimits",
@@ -20177,6 +20194,7 @@ var init_types6 = __esm({
       agents: "O",
       lastTool: "O",
       lastSkill: "O",
+      cacheRate: "S",
       model: "S",
       enterpriseCost: "S",
       rateLimits: "S",
@@ -20263,8 +20281,10 @@ var init_types6 = __esm({
         sessionSummary: false,
         // Disabled by default - opt-in AI-generated session summary
         maxOutputLines: 4,
-        safeMode: true
+        safeMode: true,
         // Enabled by default to prevent terminal rendering corruption (Issue #346)
+        cacheRate: true
+        // Cache hit rate from stdin current_usage; renders null when data absent
       },
       thresholds: {
         contextWarning: 70,
@@ -54632,6 +54652,18 @@ function getTotalTokens(stdin) {
   const usage = getCurrentUsage(stdin);
   return (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0);
 }
+function getCacheUsage(stdin) {
+  const usage = getCurrentUsage(stdin);
+  if (!usage) return null;
+  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  if (cacheCreation <= 0 && cacheRead <= 0) return null;
+  return {
+    inputTokens: usage.input_tokens ?? 0,
+    cacheCreationInputTokens: cacheCreation,
+    cacheReadInputTokens: cacheRead
+  };
+}
 function getTotalInputTokens(stdin) {
   return stdin.context_window?.total_input_tokens ?? 0;
 }
@@ -56065,13 +56097,13 @@ function getContextSeverity(safePercent, thresholds) {
   }
   return "normal";
 }
-function getContextDisplayStyle(safePercent, thresholds) {
+function getContextDisplayStyle(safePercent, thresholds, labels = DEFAULT_HUD_LABELS) {
   const severity = getContextSeverity(safePercent, thresholds);
   switch (severity) {
     case "critical":
-      return { color: STATUS.critical, suffix: " CRITICAL" };
+      return { color: STATUS.critical, suffix: labels.criticalSuffix };
     case "compact":
-      return { color: STATUS.warn, suffix: "! compact" };
+      return { color: STATUS.warn, suffix: labels.compactSuffix };
     case "warning":
       return { color: STATUS.warn, suffix: "" };
     default:
@@ -56111,14 +56143,14 @@ function getStableContextDisplayPercent(percent, thresholds, displayScope) {
 }
 function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   return `${DIM}${labels.context}:${RESET}${color}${safePercent}%${suffix}${RESET}`;
 }
 function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const filled = Math.round(safePercent / 100 * barWidth);
   const empty = barWidth - filled;
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   const bar = `${color}${"\u2588".repeat(filled)}${DIM}${"\u2591".repeat(empty)}${RESET}`;
   return `${DIM}${labels.context}:${RESET}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
@@ -56320,20 +56352,20 @@ function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
   }
   return parts.join(" ");
 }
-function renderRateLimitsError(result) {
+function renderRateLimitsError(result, labels = DEFAULT_HUD_LABELS) {
   if (!result?.error) return null;
   if (result.error === "no_credentials") return null;
   if (result.error === "rate_limited") {
-    return result.rateLimits ? null : `${DIM}[usage:429]${RESET}`;
+    return result.rateLimits ? null : `${DIM}[${labels.usage}:429]${RESET}`;
   }
-  if (result.error === "auth") return `${STATUS.warn}[usage:auth]${RESET}`;
-  return `${STATUS.warn}[usage:err]${RESET}`;
+  if (result.error === "auth") return `${STATUS.warn}[${labels.usage}:auth]${RESET}`;
+  return `${STATUS.warn}[${labels.usage}:err]${RESET}`;
 }
-function renderApiKeyUsageHint(result, apiKeyMode, hasCustomProvider) {
+function renderApiKeyUsageHint(result, apiKeyMode, hasCustomProvider, labels = DEFAULT_HUD_LABELS) {
   if (!apiKeyMode) return null;
   if (hasCustomProvider) return null;
   if (result?.error !== "no_credentials") return null;
-  return `${DIM}[usage: set omcHud.rateLimitsProvider]${RESET}`;
+  return `${DIM}[${labels.usage}: set omcHud.rateLimitsProvider]${RESET}`;
 }
 function bucketUsagePercent(usage) {
   if (usage.type === "percent") return usage.value;
@@ -56372,6 +56404,7 @@ var WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
 var init_limits = __esm({
   "src/hud/elements/limits.ts"() {
     "use strict";
+    init_types6();
     init_colors();
     WARNING_THRESHOLD = PERCENT_WARN;
     CRITICAL_THRESHOLD2 = PERCENT_CRITICAL;
@@ -56415,16 +56448,17 @@ var init_thinking = __esm({
 });
 
 // src/hud/elements/session.ts
-function renderSession(session, showIndicator = true) {
+function renderSession(session, showIndicator = true, labels = DEFAULT_HUD_LABELS) {
   if (!session) return null;
   const colorize = session.health === "critical" ? red : session.health === "warning" ? yellow : green;
   const indicator = showIndicator ? colorize(HEALTH_INDICATOR[session.health]) : "";
-  return `${indicator}${DIM}session:${RESET}${colorize(`${session.durationMinutes}m`)}`;
+  return `${indicator}${DIM}${labels.session}:${RESET}${colorize(`${session.durationMinutes}m`)}`;
 }
 var HEALTH_INDICATOR;
 var init_session = __esm({
   "src/hud/elements/session.ts"() {
     "use strict";
+    init_types6();
     init_colors();
     HEALTH_INDICATOR = {
       critical: "\u25CF",
@@ -56434,16 +56468,43 @@ var init_session = __esm({
   }
 });
 
+// src/hud/elements/cache-rate.ts
+function computeCacheHitRate(usage) {
+  if (!usage) return null;
+  if (usage.cacheReadInputTokens <= 0 && usage.cacheCreationInputTokens <= 0) {
+    return null;
+  }
+  const total = usage.inputTokens + usage.cacheCreationInputTokens + usage.cacheReadInputTokens;
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const rate = usage.cacheReadInputTokens / total * 100;
+  return Math.min(100, Math.max(0, Math.round(rate)));
+}
+function renderCacheRate(usage, labels = DEFAULT_HUD_LABELS) {
+  const rate = computeCacheHitRate(usage);
+  if (rate === null) return null;
+  const color = rate >= CACHE_RATE_OK_THRESHOLD ? STATUS.ok : STATUS.warn;
+  return `${DIM}${labels.cache}:${RESET}${color}${rate}%${RESET}`;
+}
+var CACHE_RATE_OK_THRESHOLD;
+var init_cache_rate = __esm({
+  "src/hud/elements/cache-rate.ts"() {
+    "use strict";
+    init_types6();
+    init_colors();
+    CACHE_RATE_OK_THRESHOLD = 70;
+  }
+});
+
 // src/hud/elements/token-usage.ts
-function splitTokenUsage(usage, sessionTotalTokens) {
+function splitTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS) {
   if (!usage) return null;
   const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
   if (!hasUsage) return null;
   return {
-    input: `${white(`\u2191${formatTokenCount(usage.inputTokens)}`)}`,
-    output: `${white(`\u2193${formatTokenCount(usage.outputTokens)}`)}`,
-    reasoning: usage.reasoningTokens && usage.reasoningTokens > 0 ? `${magenta(`r:${formatTokenCount(usage.reasoningTokens)}`)}` : null,
-    session: sessionTotalTokens && sessionTotalTokens > 0 ? `${cyan(`tot:${formatTokenCount(sessionTotalTokens)}`)}` : null
+    input: `${white(formatTokenCount(usage.inputTokens))}`,
+    output: `${white(formatTokenCount(usage.outputTokens))}`,
+    reasoning: usage.reasoningTokens && usage.reasoningTokens > 0 ? `${magenta(`${labels.reasoning}:${formatTokenCount(usage.reasoningTokens)}`)}` : null,
+    session: sessionTotalTokens && sessionTotalTokens > 0 ? `${cyan(`${labels.sessionTotal}:${formatTokenCount(sessionTotalTokens)}`)}` : null
   };
 }
 function joinTokenParts(parts) {
@@ -56452,6 +56513,7 @@ function joinTokenParts(parts) {
 var init_token_usage = __esm({
   "src/hud/elements/token-usage.ts"() {
     "use strict";
+    init_types6();
     init_formatting();
     init_colors();
   }
@@ -56923,14 +56985,14 @@ function detectMultiRepo(cwd2) {
   multiRepoCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS4 });
   return result;
 }
-function renderMultiRepo(cwd2) {
+function renderMultiRepo(cwd2, labels = DEFAULT_HUD_LABELS) {
   const info = detectMultiRepo(cwd2);
   if (!info || !info.isMultiRepo) return null;
   if (!info.hasMarker) {
     return yellow("\u26A0 multi-repo (unmarked)");
   }
   const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:~")}${green(String(info.activeSessions))}` : ` ${dim("sessions:~")}${dim("0")}`;
-  return `${dim("mr:")}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
+  return `${dim(`${labels.multiRepo}:`)}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
 }
 var import_node_child_process13, import_node_fs19, import_node_path24, ACTIVITY_WINDOW_MS, SESSION_ID_PATTERN, CACHE_TTL_MS4, multiRepoCache;
 var init_multi_repo = __esm({
@@ -56939,6 +57001,7 @@ var init_multi_repo = __esm({
     import_node_child_process13 = require("node:child_process");
     import_node_fs19 = require("node:fs");
     import_node_path24 = require("node:path");
+    init_types6();
     init_colors();
     init_worktree_paths();
     ACTIVITY_WINDOW_MS = 5 * 60 * 1e3;
@@ -57296,7 +57359,7 @@ async function render(context, config2) {
     );
     if (cwdElement) rendered.set("cwd", cwdElement);
   }
-  const multiRepoElement = enabledElements.gitRepo ? renderMultiRepo(context.cwd) : null;
+  const multiRepoElement = enabledElements.gitRepo ? renderMultiRepo(context.cwd, hudLabels) : null;
   if (multiRepoElement) {
     rendered.set("gitRepo", multiRepoElement);
   } else {
@@ -57353,14 +57416,15 @@ async function render(context, config2) {
       ) : renderRateLimits(context.rateLimitsResult.rateLimits, stale);
       if (limits) rendered.set("rateLimits", limits);
     } else {
-      const errorIndicator = renderRateLimitsError(context.rateLimitsResult);
+      const errorIndicator = renderRateLimitsError(context.rateLimitsResult, hudLabels);
       if (errorIndicator) {
         rendered.set("rateLimits", errorIndicator);
       } else {
         const hint = renderApiKeyUsageHint(
           context.rateLimitsResult,
           context.apiKeyMode ?? false,
-          config2.rateLimitsProvider?.type === "custom"
+          config2.rateLimitsProvider?.type === "custom",
+          hudLabels
         );
         if (hint) rendered.set("rateLimits", hint);
       }
@@ -57387,11 +57451,15 @@ async function render(context, config2) {
     const prompt = renderPromptTime(context.promptTime, /* @__PURE__ */ new Date());
     if (prompt) rendered.set("promptTime", prompt);
   }
+  if (enabledElements.cacheRate && context.cacheUsage) {
+    const cache = renderCacheRate(context.cacheUsage, hudLabels);
+    if (cache) rendered.set("cacheRate", cache);
+  }
   if (enabledElements.sessionHealth && context.sessionHealth) {
     const showDuration = enabledElements.showSessionDuration ?? true;
     const showIndicator = enabledElements.showHealthIndicator ?? true;
     if (showDuration || showIndicator) {
-      const session = renderSession(context.sessionHealth, showIndicator);
+      const session = renderSession(context.sessionHealth, showIndicator, hudLabels);
       if (session) rendered.set("session", session);
     }
   }
@@ -57406,7 +57474,8 @@ async function render(context, config2) {
     } else if (enabledElements.showTokens === true) {
       tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
-        context.sessionTotalTokens
+        context.sessionTotalTokens,
+        hudLabels
       );
       if (tokenParts && !enableGrouping) {
         rendered.set("tokens", joinTokenParts(tokenParts));
@@ -57415,7 +57484,8 @@ async function render(context, config2) {
   } else if (enabledElements.showTokens === true) {
     tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
-      context.sessionTotalTokens
+      context.sessionTotalTokens,
+      hudLabels
     );
     if (tokenParts && !enableGrouping) {
       rendered.set("tokens", joinTokenParts(tokenParts));
@@ -57550,10 +57620,10 @@ async function render(context, config2) {
       }
       if (name === "tokens") {
         if (!tokenParts) continue;
-        regions.I.push(tokenParts.input);
+        const input = [tokenParts.input, tokenParts.session].filter((p) => p !== null).join(" ");
+        regions.I.push(input);
         const output = [tokenParts.output, tokenParts.reasoning].filter((p) => p !== null).join(" ");
         if (output) regions.O.push(output);
-        if (tokenParts.session) regions.S.push(tokenParts.session);
         continue;
       }
       let el = rendered.get(name);
@@ -57658,6 +57728,7 @@ var init_render = __esm({
     init_permission();
     init_thinking();
     init_session();
+    init_cache_rate();
     init_token_usage();
     init_enterprise_cost();
     init_prompt_time();
@@ -57725,12 +57796,8 @@ var init_sanitize = __esm({
       // width 1 → 1 (preserved)
       "\u21E1": "^",
       // width 2 → 1 (narrowed — git ahead, ASCII has no double-width arrow)
-      "\u21E3": "v",
+      "\u21E3": "v"
       // width 2 → 1 (narrowed — git behind, ASCII has no double-width arrow)
-      "\u2191": "^",
-      // width 2 → 1 (narrowed — token input, ASCII has no double-width arrow)
-      "\u2193": "v"
-      // width 2 → 1 (narrowed — token output, ASCII has no double-width arrow)
     };
   }
 });
@@ -58175,6 +58242,7 @@ async function main2(watchMode = false, skipInit = false) {
       ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
+      cacheUsage: getCacheUsage(stdin),
       omcVersion,
       updateAvailable,
       toolCallCount: transcriptData.toolCallCount,

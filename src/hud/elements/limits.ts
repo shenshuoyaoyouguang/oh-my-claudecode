@@ -6,6 +6,8 @@
  */
 
 import type { RateLimits, CustomProviderResult, CustomBucketUsage, UsageResult } from '../types.js';
+import { DEFAULT_HUD_LABELS } from '../types.js';
+import type { HudLabels } from '../types.js';
 import { RESET, DIM, STATUS, PERCENT_WARN, PERCENT_CRITICAL } from '../colors.js';
 
 // 阈值单一来源：与 context/cost/payload 共用 colors.ts 的统一百分比阈值（P0-1 / P1-07）
@@ -297,16 +299,19 @@ export function renderRateLimitsWithBar(
  * - 'auth': credentials expired, refresh failed → [API auth]
  * - 'no_credentials': no OAuth credentials (expected for API key users) → null (no display)
  */
-export function renderRateLimitsError(result: UsageResult | null): string | null {
+export function renderRateLimitsError(
+  result: UsageResult | null,
+  labels: Pick<HudLabels, 'usage'> = DEFAULT_HUD_LABELS,
+): string | null {
   if (!result?.error) return null;
   if (result.error === 'no_credentials') return null;
   if (result.error === 'rate_limited') {
     // Prefer rendering stale usage percentages when available; only show the 429 badge
     // when there is no cached rate limit data to display.
-    return result.rateLimits ? null : `${DIM}[usage:429]${RESET}`;
+    return result.rateLimits ? null : `${DIM}[${labels.usage}:429]${RESET}`;
   }
-  if (result.error === 'auth') return `${STATUS.warn}[usage:auth]${RESET}`;
-  return `${STATUS.warn}[usage:err]${RESET}`;
+  if (result.error === 'auth') return `${STATUS.warn}[${labels.usage}:auth]${RESET}`;
+  return `${STATUS.warn}[${labels.usage}:err]${RESET}`;
 }
 
 /**
@@ -327,11 +332,12 @@ export function renderApiKeyUsageHint(
   result: UsageResult | null,
   apiKeyMode: boolean,
   hasCustomProvider: boolean,
+  labels: Pick<HudLabels, 'usage'> = DEFAULT_HUD_LABELS,
 ): string | null {
   if (!apiKeyMode) return null;
   if (hasCustomProvider) return null;
   if (result?.error !== 'no_credentials') return null;
-  return `${DIM}[usage: set omcHud.rateLimitsProvider]${RESET}`;
+  return `${DIM}[${labels.usage}: set omcHud.rateLimitsProvider]${RESET}`;
 }
 
 // ============================================================================

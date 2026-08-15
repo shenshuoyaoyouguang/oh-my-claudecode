@@ -13,7 +13,7 @@ import {
   listSessionIds,
   resolveOmcPath,
 } from '../lib/worktree-paths.js';
-import type { RateLimits, StatuslineStdin } from './types.js';
+import type { CacheUsage, RateLimits, StatuslineStdin } from './types.js';
 
 const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
 
@@ -250,6 +250,23 @@ function getTotalTokens(stdin: StatuslineStdin): number {
     (usage?.cache_creation_input_tokens ?? 0) +
     (usage?.cache_read_input_tokens ?? 0)
   );
+}
+
+/**
+ * Extract cache token usage from stdin context_window.current_usage.
+ * Used by the cache-rate element; returns null when no cache data is present.
+ */
+export function getCacheUsage(stdin: StatuslineStdin): CacheUsage | null {
+  const usage = getCurrentUsage(stdin);
+  if (!usage) return null;
+  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  if (cacheCreation <= 0 && cacheRead <= 0) return null;
+  return {
+    inputTokens: usage.input_tokens ?? 0,
+    cacheCreationInputTokens: cacheCreation,
+    cacheReadInputTokens: cacheRead,
+  };
 }
 
 function getTotalInputTokens(stdin: StatuslineStdin): number {

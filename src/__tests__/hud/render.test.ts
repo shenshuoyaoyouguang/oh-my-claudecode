@@ -604,17 +604,16 @@ describe('token usage rendering', () => {
     const result = await render(createTokenContext(), createTokenConfig(true));
     const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
 
-    // ↑ = input, ↓ = output, r = reasoning, s = session total
-    // P0-3：r/tot 带冒号自解释前缀
-    expect(plain).toContain('↑1.3k ↓340 r:120 tot:6.6k');
+    // arrows removed: plain numbers with r:/tot: prefixes
+    expect(plain).toContain('1.3k 340 r:120 tot:6.6k');
   });
 
   it('omits last-request token usage when explicitly disabled', async () => {
     const result = await render(createTokenContext(), createTokenConfig(false));
     const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
 
-    expect(plain).not.toContain('↑1.3k');
-    expect(plain).not.toContain('s6.6k');
+    expect(plain).not.toContain('1.3k');
+    expect(plain).not.toContain('tot:6.6k');
   });
 
   it('groups token parts into I/O/S regions when ioGrouping is enabled', async () => {
@@ -628,18 +627,19 @@ describe('token usage rendering', () => {
     expect(plain).toContain('S:');
 
     // Region order is Input → Output → Status:
-    // input token in I, output+reasoning in O, session total in S.
+    // input + session total in I (累计前移), output+reasoning in O.
     const iIdx = plain.indexOf('I:');
     const oIdx = plain.indexOf('O:');
     const sIdx = plain.indexOf('S:');
-    const inputIdx = plain.indexOf('↑1.3k');
-    const outputIdx = plain.indexOf('↓340 r:120');
+    const inputIdx = plain.indexOf('1.3k');
     const sessionIdx = plain.indexOf('tot:6.6k');
+    const outputIdx = plain.indexOf('340 r:120');
     expect(inputIdx).toBeGreaterThan(iIdx);
     expect(inputIdx).toBeLessThan(oIdx);
+    expect(sessionIdx).toBeGreaterThan(iIdx);
+    expect(sessionIdx).toBeLessThan(oIdx);
     expect(outputIdx).toBeGreaterThan(oIdx);
     expect(outputIdx).toBeLessThan(sIdx);
-    expect(sessionIdx).toBeGreaterThan(sIdx);
   });
 
   it('buckets elements by region map even when a custom layout mixes regions', async () => {
@@ -659,7 +659,7 @@ describe('token usage rendering', () => {
     expect(plain.indexOf('ctx:30%')).toBeGreaterThan(plain.indexOf('I:'));
     expect(plain.indexOf('ctx:30%')).toBeLessThan(plain.indexOf('O:'));
     expect(plain).toContain('O:');
-    expect(plain).toContain('↓340 r:120');
+    expect(plain).toContain('340 r:120');
     expect(plain.indexOf('Model: Sonnet 4.5')).toBeGreaterThan(plain.indexOf('S:'));
   });
 });

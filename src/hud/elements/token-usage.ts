@@ -2,34 +2,36 @@
  * OMC HUD - Token Usage Element
  *
  * Renders last-request input/output token usage from transcript metadata.
- * Arrow direction follows the upload/download intuition:
- *   ↑ = input  (tokens sent up to the model)
- *   ↓ = output (tokens received down from the model)
+ * Tokens render as plain numbers (no arrow prefix) — the arrow glyphs were
+ * removed for cleaner i18n-friendly output; labels distinguish meaning
+ * (输入/输出 via region tags, 推理/累计 via label prefixes).
  *
  * The element can be rendered as a single compact string (renderTokenUsage)
  * or split into I/O/S parts (splitTokenUsage) so region-aware rendering can
  * place input under I, output+reasoning under O, and the session total under S.
  */
 
-import type { LastRequestTokenUsage } from '../types.js';
+import type { HudLabels, LastRequestTokenUsage } from '../types.js';
+import { DEFAULT_HUD_LABELS } from '../types.js';
 import { formatTokenCount } from '../../cli/utils/formatting.js';
 import { cyan, magenta, white } from '../colors.js';
 
 /** I/O/S token parts for region-aware rendering. */
 export interface TokenUsageParts {
-  /** ↑ input tokens (white) — Input (I) region */
+  /** input token count (white) — Input (I) region */
   input: string;
-  /** ↓ output tokens (white) — Output (O) region */
+  /** output token count (white) — Output (O) region */
   output: string;
-  /** r: reasoning tokens (magenta) — Output (O) region, optional */
+  /** reasoning token count (magenta) — Output (O) region, optional */
   reasoning: string | null;
-  /** tot: session total (cyan) — Status (S) region, optional */
+  /** session total (cyan) — Input (I) region (moved from S), optional */
   session: string | null;
 }
 
 export function splitTokenUsage(
   usage: LastRequestTokenUsage | null | undefined,
   sessionTotalTokens?: number | null,
+  labels: Pick<HudLabels, 'reasoning' | 'sessionTotal'> = DEFAULT_HUD_LABELS,
 
 ): TokenUsageParts | null {
   if (!usage) return null;
@@ -38,15 +40,15 @@ export function splitTokenUsage(
   if (!hasUsage) return null;
 
   return {
-    input: `${white(`↑${formatTokenCount(usage.inputTokens)}`)}`,
-    output: `${white(`↓${formatTokenCount(usage.outputTokens)}`)}`,
+    input: `${white(formatTokenCount(usage.inputTokens))}`,
+    output: `${white(formatTokenCount(usage.outputTokens))}`,
     reasoning:
       usage.reasoningTokens && usage.reasoningTokens > 0
-        ? `${magenta(`r:${formatTokenCount(usage.reasoningTokens)}`)}`
+        ? `${magenta(`${labels.reasoning}:${formatTokenCount(usage.reasoningTokens)}`)}`
         : null,
     session:
       sessionTotalTokens && sessionTotalTokens > 0
-        ? `${cyan(`tot:${formatTokenCount(sessionTotalTokens)}`)}`
+        ? `${cyan(`${labels.sessionTotal}:${formatTokenCount(sessionTotalTokens)}`)}`
         : null,
   };
 }
@@ -61,8 +63,9 @@ export function joinTokenParts(parts: TokenUsageParts): string {
 export function renderTokenUsage(
   usage: LastRequestTokenUsage | null | undefined,
   sessionTotalTokens?: number | null,
+  labels: Pick<HudLabels, 'reasoning' | 'sessionTotal'> = DEFAULT_HUD_LABELS,
 
 ): string | null {
-  const parts = splitTokenUsage(usage, sessionTotalTokens);
+  const parts = splitTokenUsage(usage, sessionTotalTokens, labels);
   return parts ? joinTokenParts(parts) : null;
 }

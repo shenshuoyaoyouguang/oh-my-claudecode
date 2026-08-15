@@ -153,7 +153,7 @@ describe('render - enterprise cost branch', () => {
     const output = await render(context, config);
     const plain = strip(output);
     // No cost data available → fall back to tokens (↑ input, ↓ output)
-    expect(plain).toContain('↑1.2k ↓340');
+    expect(plain).toContain('1.2k 340');
   });
 
   it('does not render enterprise cost when showEnterpriseCost is false', async () => {
@@ -242,7 +242,7 @@ describe('render - enterprise cost branch', () => {
     const config = createConfig({ showTokens: true, showEnterpriseCost: true });
     const output = await render(context, config);
     const plain = strip(output);
-    expect(plain).toContain('↑1.2k ↓340');
+    expect(plain).toContain('1.2k 340');
     expect(plain).not.toContain('spent:');
   });
 });

@@ -4,7 +4,8 @@
  * Renders session duration and health indicator.
  */
 
-import type { SessionHealth } from '../types.js';
+import type { HudLabels, SessionHealth } from '../types.js';
+import { DEFAULT_HUD_LABELS } from '../types.js';
 import { green, red, yellow, DIM, RESET } from '../colors.js';
 
 /**
@@ -26,6 +27,7 @@ const HEALTH_INDICATOR = {
 export function renderSession(
   session: SessionHealth | null,
   showIndicator = true,
+  labels: Pick<HudLabels, 'session'> = DEFAULT_HUD_LABELS,
 ): string | null {
   if (!session) return null;
 
@@ -36,5 +38,5 @@ export function renderSession(
   const indicator = showIndicator
     ? colorize(HEALTH_INDICATOR[session.health])
     : '';
-  return `${indicator}${DIM}session:${RESET}${colorize(`${session.durationMinutes}m`)}`;
+  return `${indicator}${DIM}${labels.session}:${RESET}${colorize(`${session.durationMinutes}m`)}`;
 }

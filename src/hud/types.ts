@@ -315,6 +315,13 @@ export interface CustomProviderResult {
   error?: string;
 }
 
+/** Cache token usage from stdin context_window.current_usage (cache hit rate rendering). */
+export interface CacheUsage {
+  inputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
 export interface HudRenderContext {
   /** Context window percentage (0-100) */
   contextPercent: number;
@@ -381,6 +388,9 @@ export interface HudRenderContext {
 
   /** Session token total (input + output) when transcript parsing is reliable enough to calculate it */
   sessionTotalTokens?: number | null;
+
+  /** Cache token usage from stdin context_window.current_usage (cache hit rate rendering) */
+  cacheUsage?: CacheUsage | null;
 
   /** Installed OMC version (e.g. "4.1.10") */
   omcVersion: string | null;
@@ -493,6 +503,22 @@ export interface HudLabels {
   output: string;
   /** I/O/S region tag label (Status / 状态) — used when ioGrouping is enabled */
   status: string;
+  /** Session duration label (session:) */
+  session: string;
+  /** Reasoning tokens prefix (r:) */
+  reasoning: string;
+  /** Session token total prefix (tot:) */
+  sessionTotal: string;
+  /** Usage badge prefix ([usage:429]) */
+  usage: string;
+  /** Multi-repo chip prefix (mr:) */
+  multiRepo: string;
+  /** Context critical suffix (' CRITICAL') */
+  criticalSuffix: string;
+  /** Context compact suggestion suffix ('! compact') */
+  compactSuffix: string;
+  /** Cache hit rate prefix (cache:) */
+  cache: string;
 }
 
 export const DEFAULT_HUD_LABELS: HudLabels = {
@@ -513,6 +539,14 @@ export const DEFAULT_HUD_LABELS: HudLabels = {
   input: 'I',
   output: 'O',
   status: 'S',
+  session: 'session',
+  reasoning: 'r',
+  sessionTotal: 'tot',
+  usage: 'usage',
+  multiRepo: 'mr',
+  criticalSuffix: ' CRITICAL',
+  compactSuffix: '! compact',
+  cache: 'cache',
 };
 
 export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
@@ -535,6 +569,14 @@ export const HUD_LOCALE_LABELS: Record<HudLocale, HudLabels> = {
     input: '输入',
     output: '输出',
     status: '状态',
+    session: '会话',
+    reasoning: '推理',
+    sessionTotal: '累计',
+    usage: '用量',
+    multiRepo: '多仓',
+    criticalSuffix: ' 临界',
+    compactSuffix: '! 压缩',
+    cache: '缓存',
   },
 };
 
@@ -607,7 +649,7 @@ export interface HudElementConfig {
   sessionHealth: boolean;     // Show session health/duration
   showSessionDuration?: boolean;  // Show session:19m duration display (default: true if sessionHealth is true)
   showHealthIndicator?: boolean;  // Show 🟢/🟡/🔴 health indicator (default: true if sessionHealth is true)
-  showTokens?: boolean;           // Show last-request token usage when enabled (↑in ↓out r s)
+  showTokens?: boolean;           // Show last-request token usage when enabled (in out r tot)
   ioGrouping?: boolean;           // Split the main statusline into I/O/S (Input/Output/Status) regions
                                   // with dimmed region tags. When enabled, elements and token parts are
                                   // grouped by region: Input (context + token input), Output (token
@@ -622,6 +664,7 @@ export interface HudElementConfig {
   maxOutputLines: number;     // Max total output lines to prevent input field shrinkage
   safeMode: boolean;          // Strip ANSI codes and use ASCII-only output to prevent terminal rendering corruption (Issue #346).
                               // Default true. Set to false to explicitly disable even on Windows (e.g. Windows Terminal with ANSI support).
+  cacheRate: boolean;         // Show cache hit rate when stdin provides cache token data (no data → element hidden).
 }
 
 export interface HudThresholds {
@@ -669,7 +712,7 @@ export interface LayoutConfig {
 export const DEFAULT_ELEMENT_ORDER: Required<LayoutConfig> = {
   line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
   main: [
-    'omcLabel', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
+    'omcLabel', 'cacheRate', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
     'session', 'tokens', 'ralph', 'autopilot', 'prd',
     'skills', 'lastSkill', 'contextBar', 'agents', 'background',
     'lastTool', 'sessionSummary',
@@ -695,6 +738,7 @@ export const DEFAULT_REGION_MAP: Record<string, HudRegionGroup> = {
   agents: 'O',
   lastTool: 'O',
   lastSkill: 'O',
+  cacheRate: 'S',
   model: 'S',
   enterpriseCost: 'S',
   rateLimits: 'S',
@@ -790,6 +834,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     sessionSummary: false, // Disabled by default - opt-in AI-generated session summary
     maxOutputLines: 4,
     safeMode: true,  // Enabled by default to prevent terminal rendering corruption (Issue #346)
+    cacheRate: true, // Cache hit rate from stdin current_usage; renders null when data absent
   },
   thresholds: {
     contextWarning: 70,

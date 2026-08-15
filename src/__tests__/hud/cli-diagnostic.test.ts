@@ -46,6 +46,7 @@ describe('HUD CLI diagnostic (no stdin, no watch mode)', () => {
       getContextPercent: vi.fn(() => 0),
       getModelName: vi.fn(() => 'unknown'),
       stabilizeContextPercent: vi.fn((_s: unknown) => _s),
+      getCacheUsage: vi.fn(() => null),
     }));
 
     vi.doMock('../../hud/transcript.js', () => ({

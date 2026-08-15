@@ -53,7 +53,7 @@ function createContext(): HudRenderContext {
     thinkingState: { active: true },
     sessionHealth: null,
     lastRequestTokenUsage: { inputTokens: 1530, outputTokens: 987 },
-    sessionTotalTokens: null,
+    sessionTotalTokens: 8765,
     omcVersion: null,
     updateAvailable: null,
     toolCallCount: 5,
@@ -125,7 +125,7 @@ describe('HUD labels', () => {
   it('keeps default HUD labels unchanged for direct renderer calls', () => {
     expect(stripAnsi(renderContext(67, DEFAULT_HUD_CONFIG.thresholds, 'labels-default') ?? '')).toBe('ctx:67%');
     const tokenOut = renderTokenUsage({ inputTokens: 1530, outputTokens: 987 });
-    expect(stripAnsi(tokenOut ?? '')).toBe('↑1.5k ↓987');
+    expect(stripAnsi(tokenOut ?? '')).toBe('1.5k 987');
     // P0-3：ASCII 标签 Tl/Ag/Sk（原 T/A/S 与 agent 编码冲突）
     expect(renderCallCounts(5, 3, 2, 'ascii')).toBe('Tl:5 Ag:3 Sk:2');
     expect(DEFAULT_HUD_LABELS.input).toBe('I');
@@ -144,10 +144,15 @@ describe('HUD labels', () => {
     expect(labels.tool).toBe('工具自定义');
     expect(labels.agent).toBe('智能体');
     expect(labels.tokens).toBe('令牌');
-    expect(labels.model).toBe('模型');
     expect(labels.input).toBe('输入');
     expect(labels.output).toBe('输出');
     expect(labels.status).toBe('状态');
+    expect(labels.sessionTotal).toBe('累计');
+    expect(labels.usage).toBe('用量');
+    expect(labels.multiRepo).toBe('多仓');
+    expect(labels.criticalSuffix).toBe(' 临界');
+    expect(labels.compactSuffix).toBe('! 压缩');
+    expect(labels.cache).toBe('缓存');
     expect('unknown' in labels).toBe(false);
   });
 
@@ -177,7 +182,7 @@ describe('HUD labels', () => {
     const output = stripAnsi(await render(createContext(), createConfig(labels)));
 
     expect(output).toContain('思考');
-    expect(output).toContain('↑1.5k ↓987');
+    expect(output).toContain('1.5k 987');
     expect(output).toContain('循环:3/10');
     expect(output).toContain('上下文:67%');
     expect(output).toContain('后台:1/5');
@@ -194,11 +199,15 @@ describe('HUD labels', () => {
     expect(output).toContain('输入:');
     expect(output).toContain('输出:');
     expect(output).toContain('状态:');
-    // token parts are split: ↑input under 输入, ↓output under 输出
-    expect(output.indexOf('↑1.5k')).toBeGreaterThan(output.indexOf('输入:'));
-    expect(output.indexOf('↑1.5k')).toBeLessThan(output.indexOf('输出:'));
-    expect(output.indexOf('↓987')).toBeGreaterThan(output.indexOf('输出:'));
-    expect(output.indexOf('↓987')).toBeLessThan(output.indexOf('状态:'));
+    // token parts are split: input under 输入, output under 输出
+    expect(output.indexOf('1.5k')).toBeGreaterThan(output.indexOf('输入:'));
+    expect(output.indexOf('1.5k')).toBeLessThan(output.indexOf('输出:'));
+    expect(output.indexOf('987')).toBeGreaterThan(output.indexOf('输出:'));
+    expect(output.indexOf('987')).toBeLessThan(output.indexOf('状态:'));
+    // 累计用量已前移至 I 区：位于输入 token 之后、输出区域之前
+    expect(output).toContain('累计:');
+    expect(output.indexOf('累计:')).toBeGreaterThan(output.indexOf('1.5k'));
+    expect(output.indexOf('累计:')).toBeLessThan(output.indexOf('输出:'));
     expect(output).toContain('循环:3/10');
   });
 });

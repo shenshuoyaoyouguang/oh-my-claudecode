@@ -159,12 +159,12 @@ describe("HUD transcript token usage plumbing", () => {
 });
 
 describe("HUD token usage rendering", () => {
-  it("formats last-request token usage with ↑/↓ arrows for input/output", () => {
+  it("formats last-request token usage as plain numbers (no arrow glyphs)", () => {
     const out = renderTokenUsage({ inputTokens: 1530, outputTokens: 987 });
     // strip ANSI to assert structure
     const stripped = out!.replace(/\x1b\[[0-9;]*m/g, "");
-    // ↑ = input (sent to model), ↓ = output (received from model)
-    expect(stripped).toBe("↑1.5k ↓987");
+    // arrows were removed for i18n-friendly output (labels/regions carry meaning)
+    expect(stripped).toBe("1.5k 987");
   });
 
   it("includes reasoning (magenta r:) and session total (cyan tot:) when available", () => {
@@ -173,8 +173,7 @@ describe("HUD token usage rendering", () => {
       8765,
     );
     const stripped = out!.replace(/\x1b\[[0-9;]*m/g, "");
-    // P0-3：r→r:、s→tot:（带冒号自解释前缀）
-    expect(stripped).toBe("↑1.5k ↓987 r:321 tot:8.8k");
+    expect(stripped).toBe("1.5k 987 r:321 tot:8.8k");
     // reasoning uses magenta, session uses cyan
     expect(out).toContain("\x1b[35m");
     expect(out).toContain("\x1b[36m");
@@ -188,9 +187,8 @@ describe("HUD token usage rendering", () => {
     expect(parts).not.toBeNull();
     const strip = (p: string | null): string =>
       (p ?? "").replace(/\x1b\[[0-9;]*m/g, "");
-    expect(strip(parts!.input)).toBe("↑1.5k");
-    expect(strip(parts!.output)).toBe("↓987");
-    // P0-3：r→r:、s→tot:
+    expect(strip(parts!.input)).toBe("1.5k");
+    expect(strip(parts!.output)).toBe("987");
     expect(strip(parts!.reasoning)).toBe("r:321");
     expect(strip(parts!.session)).toBe("tot:8.8k");
   });

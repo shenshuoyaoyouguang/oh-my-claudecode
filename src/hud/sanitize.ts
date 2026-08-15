@@ -70,8 +70,6 @@ const UNICODE_TO_ASCII: Record<string, string> = {
   '╎': '|',     // width 1 → 1 (preserved)
   '⇡': '^',     // width 2 → 1 (narrowed — git ahead, ASCII has no double-width arrow)
   '⇣': 'v',     // width 2 → 1 (narrowed — git behind, ASCII has no double-width arrow)
-  '↑': '^',     // width 2 → 1 (narrowed — token input, ASCII has no double-width arrow)
-  '↓': 'v',     // width 2 → 1 (narrowed — token output, ASCII has no double-width arrow)
 };
 
 /**
@@ -80,8 +78,9 @@ const UNICODE_TO_ASCII: Record<string, string> = {
  * Block characters (█, ░, ▓, ▒) are preserved — modern terminals handle them
  * at the correct width and ASCII replacement destroys the progress-bar gradient.
  *
- * Emoji/ambiguous chars (🔧🤖⚡💭⏱⇡⇣↑↓╎) are replaced so safeMode output has
- * deterministic column widths (R-WIDTH-3).
+ * Emoji/ambiguous chars (🔧🤖⚡💭⏱⇡⇣╎) are replaced so safeMode output has
+ * deterministic column widths (R-WIDTH-3). (↑↓ removed — token usage no
+ * longer renders arrow glyphs.)
  */
 export function replaceUnicodeBlocks(text: string): string {
   if (text.length === 0) return text;

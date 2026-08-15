@@ -15,6 +15,7 @@ import {
   getModelName,
   getRateLimitsFromStdin,
   stabilizeContextPercent,
+  getCacheUsage,
 } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import {
@@ -522,6 +523,7 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
+      cacheUsage: getCacheUsage(stdin),
       omcVersion,
       updateAvailable,
       toolCallCount: transcriptData.toolCallCount,

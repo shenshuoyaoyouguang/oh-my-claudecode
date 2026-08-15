@@ -17,6 +17,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import type { HudLabels } from '../types.js';
+import { DEFAULT_HUD_LABELS } from '../types.js';
 import { cyan, dim, green, yellow } from '../colors.js';
 import { getOmcRoot } from '../../lib/worktree-paths.js';
 
@@ -211,7 +213,10 @@ export function detectMultiRepo(cwd?: string): MultiRepoInfo | null {
  *   mr:bidchex-repos repos:11 sessions:2
  *   multi-repo detected — create .omc-workspace to enable shared state
  */
-export function renderMultiRepo(cwd?: string): string | null {
+export function renderMultiRepo(
+  cwd?: string,
+  labels: Pick<HudLabels, 'multiRepo'> = DEFAULT_HUD_LABELS,
+): string | null {
   const info = detectMultiRepo(cwd);
   if (!info || !info.isMultiRepo) return null;
 
@@ -229,7 +234,7 @@ export function renderMultiRepo(cwd?: string): string | null {
       : ` ${dim('sessions:~')}${dim('0')}`;
 
   return (
-    `${dim('mr:')}${cyan(info.parentName)}` +
+    `${dim(`${labels.multiRepo}:`)}${cyan(info.parentName)}` +
     ` ${dim('repos:')}${cyan(String(info.subrepoCount))}` +
     sessionsPart
   );

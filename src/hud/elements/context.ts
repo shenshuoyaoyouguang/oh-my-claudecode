@@ -41,14 +41,15 @@ function getContextSeverity(
 function getContextDisplayStyle(
   safePercent: number,
   thresholds: HudThresholds,
+  labels: Pick<HudLabels, 'criticalSuffix' | 'compactSuffix'> = DEFAULT_HUD_LABELS,
 ): { color: string; suffix: string } {
   const severity = getContextSeverity(safePercent, thresholds);
 
   switch (severity) {
     case 'critical':
-      return { color: STATUS.critical, suffix: ' CRITICAL' };
+      return { color: STATUS.critical, suffix: labels.criticalSuffix };
     case 'compact':
-      return { color: STATUS.warn, suffix: '! compact' };
+      return { color: STATUS.warn, suffix: labels.compactSuffix };
     case 'warning':
       return { color: STATUS.warn, suffix: '' };
     default:
@@ -128,10 +129,10 @@ export function renderContext(
   percent: number,
   thresholds: HudThresholds,
   displayScope?: string | null,
-  labels: Pick<HudLabels, 'context'> = DEFAULT_HUD_LABELS,
+  labels: Pick<HudLabels, 'context' | 'criticalSuffix' | 'compactSuffix'> = DEFAULT_HUD_LABELS,
 ): string | null {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
 
   return `${DIM}${labels.context}:${RESET}${color}${safePercent}%${suffix}${RESET}`;
 }
@@ -146,13 +147,13 @@ export function renderContextWithBar(
   thresholds: HudThresholds,
   barWidth: number = 10,
   displayScope?: string | null,
-  labels: Pick<HudLabels, 'context'> = DEFAULT_HUD_LABELS,
+  labels: Pick<HudLabels, 'context' | 'criticalSuffix' | 'compactSuffix'> = DEFAULT_HUD_LABELS,
 ): string | null {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const filled = Math.round((safePercent / 100) * barWidth);
   const empty = barWidth - filled;
 
-  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+  const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
   const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
   return `${DIM}${labels.context}:${RESET}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

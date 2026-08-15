@@ -39,6 +39,7 @@ import {
 import { renderPermission } from "./elements/permission.js";
 import { renderThinking } from "./elements/thinking.js";
 import { renderSession } from "./elements/session.js";
+import { renderCacheRate } from "./elements/cache-rate.js";
 import {
   joinTokenParts,
   splitTokenUsage,
@@ -372,7 +373,7 @@ export async function render(
   // workspace summary. When cwd is itself a git repo, renderMultiRepo
   // returns null and the normal git elements take over.
   const multiRepoElement = enabledElements.gitRepo
-    ? renderMultiRepo(context.cwd)
+    ? renderMultiRepo(context.cwd, hudLabels)
     : null;
 
   if (multiRepoElement) {
@@ -463,7 +464,7 @@ export async function render(
         : renderRateLimits(context.rateLimitsResult.rateLimits, stale);
       if (limits) rendered.set("rateLimits", limits);
     } else {
-      const errorIndicator = renderRateLimitsError(context.rateLimitsResult);
+      const errorIndicator = renderRateLimitsError(context.rateLimitsResult, hudLabels);
       if (errorIndicator) {
         rendered.set("rateLimits", errorIndicator);
       } else {
@@ -471,6 +472,7 @@ export async function render(
           context.rateLimitsResult,
           context.apiKeyMode ?? false,
           config.rateLimitsProvider?.type === "custom",
+          hudLabels,
         );
         if (hint) rendered.set("rateLimits", hint);
       }
@@ -503,11 +505,17 @@ export async function render(
     if (prompt) rendered.set("promptTime", prompt);
   }
 
+  // Cache hit rate (S region, first element) — null when stdin has no cache data
+  if (enabledElements.cacheRate && context.cacheUsage) {
+    const cache = renderCacheRate(context.cacheUsage, hudLabels);
+    if (cache) rendered.set("cacheRate", cache);
+  }
+
   if (enabledElements.sessionHealth && context.sessionHealth) {
     const showDuration = enabledElements.showSessionDuration ?? true;
     const showIndicator = enabledElements.showHealthIndicator ?? true;
     if (showDuration || showIndicator) {
-      const session = renderSession(context.sessionHealth, showIndicator);
+      const session = renderSession(context.sessionHealth, showIndicator, hudLabels);
       if (session) rendered.set("session", session);
     }
   }
@@ -525,7 +533,7 @@ export async function render(
       tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
-
+        hudLabels,
       );
       if (tokenParts && !enableGrouping) {
         rendered.set("tokens", joinTokenParts(tokenParts));
@@ -535,7 +543,7 @@ export async function render(
     tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
-
+      hudLabels,
     );
     if (tokenParts && !enableGrouping) {
       rendered.set("tokens", joinTokenParts(tokenParts));
@@ -690,7 +698,7 @@ export async function render(
 
   /** Collect inline elements grouped into I/O/S regions (ioGrouping enabled).
    *  Each element is bucketed by DEFAULT_REGION_MAP (falling back to Status),
-   *  `tokens` is split so ↑input lands in I, ↓output+r in O, and sSession in S,
+   *  `tokens` is split so input+session land in I, output+r in O,
    *  and `omcLabel` stays an untagged leading brand prefix. A dimmed region tag
    *  is prefixed to the first content of each non-empty region. */
   function collectInlineWithRegions(order: string[]): string[] {
@@ -710,12 +718,16 @@ export async function render(
       }
       if (name === 'tokens') {
         if (!tokenParts) continue;
-        regions.I.push(tokenParts.input);
+        // input + session total both land in I (单次输入与累计并列);
+        // output + reasoning land in O; S no longer carries token parts.
+        const input = [tokenParts.input, tokenParts.session]
+          .filter((p): p is string => p !== null)
+          .join(' ');
+        regions.I.push(input);
         const output = [tokenParts.output, tokenParts.reasoning]
           .filter((p): p is string => p !== null)
           .join(' ');
         if (output) regions.O.push(output);
-        if (tokenParts.session) regions.S.push(tokenParts.session);
         continue;
       }
 
