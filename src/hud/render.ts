@@ -143,6 +143,17 @@ const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 
 const PLAIN_SEPARATOR = " | ";
 const DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+// L2 region separator (B-3, P1-10): visually distinct from the L1 element
+// separator so I/O/S region boundaries are discernible at a glance.
+// U+257E BOX DRAWINGS LIGHT QUADRUPLE DASH HORIZONTAL — safeMode falls back
+// to | via sanitize.ts UNICODE_TO_ASCII.
+const PLAIN_REGION_SEPARATOR = " ╎ ";
+const REGION_SEPARATOR = dim(PLAIN_REGION_SEPARATOR);
+
+// Narrow terminal threshold (B-6, P1-14): below this width, detail lines
+// (warnings/agents/todos) are prioritized over the main statusline so the
+// user never loses actionable context on small terminals.
+const NARROW_TERMINAL_THRESHOLD = 70;
 
 /** I/O/S region display order for ioGrouping (Input → Output → Status). */
 const REGION_ORDER: readonly HudRegionGroup[] = ['I', 'O', 'S'];
@@ -234,11 +245,15 @@ function wrapLineToMaxWidth(line: string, maxWidth: number): string[] {
   if (maxWidth <= 0) return [""];
   if (stringWidth(line) <= maxWidth) return [line];
 
-  const separator = line.includes(DIM_SEPARATOR)
-    ? DIM_SEPARATOR
-    : line.includes(PLAIN_SEPARATOR)
-      ? PLAIN_SEPARATOR
-      : null;
+  const separator = line.includes(REGION_SEPARATOR)
+    ? REGION_SEPARATOR
+    : line.includes(PLAIN_REGION_SEPARATOR)
+      ? PLAIN_REGION_SEPARATOR
+      : line.includes(DIM_SEPARATOR)
+        ? DIM_SEPARATOR
+        : line.includes(PLAIN_SEPARATOR)
+          ? PLAIN_SEPARATOR
+          : null;
 
   if (!separator) {
     return [truncateLineToMaxWidth(line, maxWidth)];
@@ -723,7 +738,7 @@ export async function render(
     }
     // Return a single joined line (or an empty array) so the caller's
     // array contract (`elements.join(...)`) is preserved.
-    return segments.length > 0 ? [segments.join(DIM_SEPARATOR)] : [];
+    return segments.length > 0 ? [segments.join(REGION_SEPARATOR)] : [];
   }
 
   /** Collect detail lines in layout order.
@@ -784,11 +799,33 @@ export async function render(
     config.wrapMode,
   );
 
-  // Apply max output line limit after wrapping so wrapped output still respects maxOutputLines.
-  const limitedLines = limitOutputLines(
-    widthAdjustedLines,
-    config.elements.maxOutputLines,
-  );
+  // Narrow terminal: prioritize detail lines so warnings/agents/todos
+  // are preserved even when the main line consumes the line budget (B-6, P1-14).
+  const isNarrowTerminal =
+    config.maxWidth != null && config.maxWidth > 0 && config.maxWidth < NARROW_TERMINAL_THRESHOLD;
+  let limitedLines: string[];
+  if (isNarrowTerminal && detailLines.length > 0 && config.elements.maxOutputLines > 1) {
+    const mainAdjusted = applyMaxWidthByMode(outputLines, config.maxWidth, config.wrapMode);
+    const detailAdjusted = applyMaxWidthByMode(detailLines, config.maxWidth, config.wrapMode);
+    const detailBudget = Math.min(detailAdjusted.length, Math.ceil(config.elements.maxOutputLines / 2));
+    const mainBudget = config.elements.maxOutputLines - detailBudget;
+    const mainSlice = mainAdjusted.slice(0, mainBudget);
+    const detailSlice = detailAdjusted.slice(0, detailBudget);
+    const droppedCount = (mainAdjusted.length - mainSlice.length)
+      + (detailAdjusted.length - detailSlice.length);
+    if (droppedCount > 0) {
+      // Replace last line with truncation indicator to preserve line budget
+      const allLines = [...mainSlice, ...detailSlice];
+      limitedLines = [
+        ...allLines.slice(0, allLines.length - 1),
+        `... (+${droppedCount + 1} lines)`,
+      ];
+    } else {
+      limitedLines = [...mainSlice, ...detailSlice];
+    }
+  } else {
+    limitedLines = limitOutputLines(widthAdjustedLines, config.elements.maxOutputLines);
+  }
 
   // Ensure line-limit indicator and all other lines still respect maxWidth.
   const finalLines =

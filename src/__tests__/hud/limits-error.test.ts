@@ -11,32 +11,32 @@ describe('renderRateLimitsError', () => {
     expect(result).toBeNull();
   });
 
-  it('returns yellow [API err] for network errors', () => {
+  it('returns yellow [usage:err] for network errors', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'network' });
     expect(result).not.toBeNull();
-    expect(result).toContain('[API err]');
+    expect(result).toContain('[usage:err]');
     // Verify yellow ANSI color code is present
     expect(result).toContain('\x1b[33m');
   });
 
-  it('returns yellow [API auth] for auth errors', () => {
+  it('returns yellow [usage:auth] for auth errors', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'auth' });
     expect(result).not.toBeNull();
-    expect(result).toContain('[API auth]');
+    expect(result).toContain('[usage:auth]');
     // Verify yellow ANSI color code is present
     expect(result).toContain('\x1b[33m');
   });
 
-  it('returns dimmed [API 429] for rate_limited errors', () => {
+  it('returns dimmed [usage:429] for rate_limited errors', () => {
     const result = renderRateLimitsError({ rateLimits: null, error: 'rate_limited' });
     expect(result).not.toBeNull();
-    expect(result).toContain('[API 429]');
+    expect(result).toContain('[usage:429]');
     // Verify dim ANSI code is present (not yellow)
     expect(result).toContain('\x1b[2m');
     expect(result).not.toContain('\x1b[33m');
   });
 
-  it('suppresses [API 429] when stale rate limit data is available', () => {
+  it('suppresses [usage:429] when stale rate limit data is available', () => {
     const result = renderRateLimitsError({
       rateLimits: { fiveHourPercent: 50, weeklyPercent: 30 },
       error: 'rate_limited',

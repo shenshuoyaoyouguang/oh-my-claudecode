@@ -78,10 +78,10 @@ describe('stripAnsi', () => {
 });
 
 describe('replaceUnicodeBlocks', () => {
-  it('should preserve Unicode blocks (now a deliberate no-op)', () => {
-    // As of Issue #3487 fix, replaceUnicodeBlocks is a no-op.
-    // Modern terminals handle block characters at correct width,
-    // and the ASCII replacement destroyed visual gradient in progress bars.
+  it('should preserve block characters (█░▓▒ kept for progress-bar gradient)', () => {
+    // Block characters are intentionally NOT replaced — modern terminals handle
+    // them at correct width, and ASCII replacement destroys the visual gradient
+    // (see Issue #3487). Only emoji/ambiguous/region-separator chars are replaced.
     expect(replaceUnicodeBlocks('████')).toBe('████');
   });
 
@@ -105,6 +105,25 @@ describe('replaceUnicodeBlocks', () => {
   it('should handle text without unicode blocks', () => {
     const input = 'Normal text';
     expect(replaceUnicodeBlocks(input)).toBe('Normal text');
+  });
+
+  it('should replace emoji with ASCII (B-2)', () => {
+    expect(replaceUnicodeBlocks('🔧')).toBe('Tl:');
+    expect(replaceUnicodeBlocks('🤖')).toBe('Ag:');
+    expect(replaceUnicodeBlocks('⚡')).toBe('Sk:');
+    expect(replaceUnicodeBlocks('💭')).toBe('*');
+    expect(replaceUnicodeBlocks('⏱')).toBe('t:');
+  });
+
+  it('should replace region separator with ASCII (B-2)', () => {
+    expect(replaceUnicodeBlocks('╎')).toBe('|');
+  });
+
+  it('should replace ambiguous arrows with ASCII (B-2)', () => {
+    expect(replaceUnicodeBlocks('⇡')).toBe('^');
+    expect(replaceUnicodeBlocks('⇣')).toBe('v');
+    expect(replaceUnicodeBlocks('↑')).toBe('^');
+    expect(replaceUnicodeBlocks('↓')).toBe('v');
   });
 });
 

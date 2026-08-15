@@ -6,7 +6,7 @@
 
 import type { RalphStateForHud, HudLabels, HudThresholds } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET, STATUS } from '../colors.js';
+import { RESET, STATUS, DIM } from '../colors.js';
 
 /**
  * Render Ralph loop state.
@@ -36,5 +36,5 @@ export function renderRalph(
     color = STATUS.ok;
   }
 
-  return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;
+  return `${DIM}${labels.ralph}:${RESET}${color}${iteration}/${maxIterations}${RESET}`;
 }

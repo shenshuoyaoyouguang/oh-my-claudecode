@@ -303,10 +303,10 @@ export function renderRateLimitsError(result: UsageResult | null): string | null
   if (result.error === 'rate_limited') {
     // Prefer rendering stale usage percentages when available; only show the 429 badge
     // when there is no cached rate limit data to display.
-    return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
+    return result.rateLimits ? null : `${DIM}[usage:429]${RESET}`;
   }
-  if (result.error === 'auth') return `${STATUS.warn}[API auth]${RESET}`;
-  return `${STATUS.warn}[API err]${RESET}`;
+  if (result.error === 'auth') return `${STATUS.warn}[usage:auth]${RESET}`;
+  return `${STATUS.warn}[usage:err]${RESET}`;
 }
 
 /**

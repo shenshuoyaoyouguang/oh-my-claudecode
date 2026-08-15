@@ -477,6 +477,70 @@ describe('maxWidth wrapMode behavior', () => {
   });
 });
 
+describe('narrow terminal detail preservation (B-6)', () => {
+  const createNarrowContext = (): HudRenderContext => ({
+    contextPercent: 50,
+    modelName: 'claude-sonnet-4-5',
+    ralph: null,
+    ultrawork: null,
+    prd: null,
+    autopilot: null,
+    activeAgents: [],
+    todos: [
+      { content: 'Implement feature X', status: 'in_progress' },
+      { content: 'Write tests', status: 'pending' },
+    ],
+    backgroundTasks: [],
+    cwd: '/home/user/project',
+    lastSkill: null,
+    rateLimitsResult: null,
+    customBuckets: null,
+    pendingPermission: null,
+    thinkingState: null,
+    sessionHealth: null,
+    omcVersion: '4.5.4',
+    updateAvailable: null,
+    toolCallCount: 5,
+    agentCallCount: 1,
+    skillCallCount: 0,
+    promptTime: null,
+    apiKeySource: null,
+    profileName: null,
+    sessionSummary: null,
+  });
+
+  it('preserves detail lines on narrow terminal (60 columns)', async () => {
+    const context = createNarrowContext();
+    const config: HudConfig = {
+      preset: 'focused',
+      elements: {
+        ...DEFAULT_HUD_CONFIG.elements,
+        omcLabel: true,
+        contextBar: true,
+        agents: true,
+        todos: true,
+        maxOutputLines: 4,
+      },
+      thresholds: DEFAULT_HUD_CONFIG.thresholds,
+      staleTaskThresholdMinutes: 30,
+      contextLimitWarning: DEFAULT_HUD_CONFIG.contextLimitWarning,
+      usageApiPollIntervalMs: DEFAULT_HUD_CONFIG.usageApiPollIntervalMs,
+      maxWidth: 60,
+      wrapMode: 'wrap',
+    };
+
+    const result = await render(context, config);
+    const lines = result.split('\n');
+
+    // Detail (todos) should be preserved on narrow terminal (B-6, P1-14)
+    expect(result).toMatch(/Implement feature X|Write tests/);
+    // All lines respect maxWidth
+    lines.forEach(line => {
+      expect(stringWidth(line)).toBeLessThanOrEqual(60);
+    });
+  });
+});
+
 describe('token usage rendering', () => {
   const createTokenContext = (): HudRenderContext => ({
     contextPercent: 30,
@@ -755,7 +819,8 @@ describe('layout element ordering', () => {
 
     // First line should be main (OMC), no git info line
     expect(lines[0]).toContain('[OMC');
-    expect(lines).toHaveLength(1);
+    // line1 is empty — no git/branch info should appear (B-4 moved callCounts to detail)
+    expect(lines.some(l => l.includes('branch:'))).toBe(false);
   });
 
   it('falls back to DEFAULT_ELEMENT_ORDER for omitted groups', async () => {
@@ -790,7 +855,8 @@ describe('layout element ordering', () => {
     expect(mainLine).toBeDefined();
     expect(mainLine!).toContain('ctx:');
     expect(mainLine!).toContain('session:');
-    expect(mainLine!).toMatch(/(?:🔧5|Tl:5)/);
+    // callCounts moved to detail in B-4; verify it appears somewhere in output
+    expect(result).toMatch(/(?:🔧5|Tl:5)/);
     expect(mainLine!.indexOf('ctx:')).toBeLessThan(mainLine!.indexOf('[OMC'));
     expect(mainLine!.indexOf('[OMC')).toBeLessThan(mainLine!.indexOf('session:'));
   });

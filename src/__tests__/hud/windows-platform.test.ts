@@ -152,7 +152,7 @@ describe('Windows HUD Platform Fixes (#739)', () => {
 
       const mod = await import('../../hud/elements/call-counts.js');
       const result = mod.renderCallCounts(42, 7, 3);
-      expect(result).toBe('T:42 A:7 S:3');
+      expect(result).toBe('Tl:42 Ag:7 Sk:3');
       expect(result).not.toContain('\u{1F527}');
       expect(result).not.toContain('\u{1F916}');
       expect(result).not.toContain('\u26A1');
@@ -173,7 +173,7 @@ describe('Windows HUD Platform Fixes (#739)', () => {
 
       const mod = await import('../../hud/elements/call-counts.js');
       const result = mod.renderCallCounts(42, 7, 3, 'ascii');
-      expect(result).toBe('T:42 A:7 S:3');
+      expect(result).toBe('Tl:42 Ag:7 Sk:3');
     });
 
     it('should return null for zero counts on Windows', async () => {
@@ -189,9 +189,9 @@ describe('Windows HUD Platform Fixes (#739)', () => {
       vi.resetModules();
 
       const mod = await import('../../hud/elements/call-counts.js');
-      expect(mod.renderCallCounts(10, 0, 0)).toBe('T:10');
-      expect(mod.renderCallCounts(0, 5, 0)).toBe('A:5');
-      expect(mod.renderCallCounts(0, 0, 2)).toBe('S:2');
+      expect(mod.renderCallCounts(10, 0, 0)).toBe('Tl:10');
+      expect(mod.renderCallCounts(0, 5, 0)).toBe('Ag:5');
+      expect(mod.renderCallCounts(0, 0, 2)).toBe('Sk:2');
     });
   });
 

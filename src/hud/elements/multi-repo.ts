@@ -216,12 +216,7 @@ export function renderMultiRepo(cwd?: string): string | null {
   if (!info || !info.isMultiRepo) return null;
 
   if (!info.hasMarker) {
-    return (
-      yellow('⚠ multi-repo detected') +
-      dim(' — run: ') +
-      cyan(`echo {} > "${info.parentName}/.omc-workspace"`) +
-      dim(' to enable shared state')
-    );
+    return yellow('⚠ multi-repo (unmarked)');
   }
 
   // ~ prefix signals "best-effort": liveness is inferred from mtime

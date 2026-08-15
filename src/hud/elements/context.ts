@@ -48,7 +48,7 @@ function getContextDisplayStyle(
     case 'critical':
       return { color: STATUS.critical, suffix: ' CRITICAL' };
     case 'compact':
-      return { color: STATUS.warn, suffix: ' COMPRESS?' };
+      return { color: STATUS.warn, suffix: '! compact' };
     case 'warning':
       return { color: STATUS.warn, suffix: '' };
     default:
@@ -133,7 +133,7 @@ export function renderContext(
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
 
-  return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
+  return `${DIM}${labels.context}:${RESET}${color}${safePercent}%${suffix}${RESET}`;
 }
 
 /**
@@ -154,5 +154,5 @@ export function renderContextWithBar(
 
   const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
   const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
-  return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
+  return `${DIM}${labels.context}:${RESET}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

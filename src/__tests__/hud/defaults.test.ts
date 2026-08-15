@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS } from '../../hud/types.js';
+import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, DEFAULT_ELEMENT_ORDER } from '../../hud/types.js';
 
 describe('HUD Default Configuration', () => {
   describe('DEFAULT_HUD_CONFIG', () => {
@@ -99,6 +99,22 @@ describe('HUD Default Configuration', () => {
 
     it('should keep ioGrouping off in the raw default config', () => {
       expect(DEFAULT_HUD_CONFIG.elements.ioGrouping).toBe(false);
+    });
+
+    it('should keep callCounts and promptTime out of main layout (B-4)', () => {
+      expect(DEFAULT_ELEMENT_ORDER.main).not.toContain('callCounts');
+      expect(DEFAULT_ELEMENT_ORDER.main).not.toContain('promptTime');
+      expect(DEFAULT_ELEMENT_ORDER.detail).toContain('callCounts');
+      expect(DEFAULT_ELEMENT_ORDER.detail).toContain('promptTime');
+    });
+
+    it('should disable callCounts and promptTime in focused preset (B-4)', () => {
+      expect(PRESET_CONFIGS.focused.showCallCounts).toBe(false);
+      expect(PRESET_CONFIGS.focused.promptTime).toBe(false);
+    });
+
+    it('should default opencode agentsFormat to tasks (B-5)', () => {
+      expect(PRESET_CONFIGS.opencode.agentsFormat).toBe('tasks');
     });
   });
 });

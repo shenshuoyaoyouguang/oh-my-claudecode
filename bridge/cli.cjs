@@ -19478,6 +19478,12 @@ function isCJKCharacter(codePoint) {
     codePoint >= 65072 && codePoint <= 65103
   );
 }
+function isEmojiChar(codePoint) {
+  return codePoint >= 126976 && codePoint <= 129791 || codePoint >= 9728 && codePoint <= 10175 || codePoint >= 11008 && codePoint <= 11263;
+}
+function isAmbiguousChar(codePoint) {
+  return codePoint >= 8592 && codePoint <= 8703 || codePoint >= 8960 && codePoint <= 9215;
+}
 function isZeroWidth(codePoint) {
   return (
     // Zero-width characters
@@ -19498,6 +19504,8 @@ function getCharWidth(char) {
   if (codePoint === void 0) return 0;
   if (isZeroWidth(codePoint)) return 0;
   if (isCJKCharacter(codePoint)) return 2;
+  if (isEmojiChar(codePoint)) return 2;
+  if (isAmbiguousChar(codePoint)) return 2;
   return 1;
 }
 function stringWidth(str) {
@@ -19712,6 +19720,9 @@ function writeState(directory, state, sessionId) {
       retryDelayMs: 20
     });
   } catch {
+    if (process.env.OMC_DEBUG) {
+      console.error("[mission-board] State lock contention, falling back to unlocked write");
+    }
     writeStateLocked();
   }
   return state;
@@ -20083,7 +20094,7 @@ function resolveHudLabels(locale, labels) {
     ...sanitizeHudLabels(labels)
   };
 }
-var DEFAULT_HUD_LABELS, HUD_LOCALE_LABELS, HUD_LABEL_KEYS, DEFAULT_ELEMENT_ORDER, DEFAULT_REGION_MAP, DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, DEFAULT_HUD_CONFIG, PRESET_CONFIGS;
+var DEFAULT_HUD_LABELS, HUD_LOCALE_LABELS, HUD_LABEL_KEYS, DEFAULT_ELEMENT_ORDER, DEFAULT_REGION_MAP, DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, MAX_BACKGROUND_CONCURRENT, DEFAULT_HUD_CONFIG, PRESET_CONFIGS;
 var init_types6 = __esm({
   "src/hud/types.ts"() {
     "use strict";
@@ -20145,7 +20156,6 @@ var init_types6 = __esm({
         "customBuckets",
         "permission",
         "thinking",
-        "promptTime",
         "session",
         "tokens",
         "ralph",
@@ -20156,11 +20166,10 @@ var init_types6 = __esm({
         "contextBar",
         "agents",
         "background",
-        "callCounts",
         "lastTool",
         "sessionSummary"
       ],
-      detail: ["missionBoard", "agents", "contextWarning", "payloadWarning", "todos"]
+      detail: ["missionBoard", "agents", "contextWarning", "payloadWarning", "todos", "callCounts", "promptTime"]
     };
     DEFAULT_REGION_MAP = {
       contextBar: "I",
@@ -20184,6 +20193,7 @@ var init_types6 = __esm({
       sessionSummary: "S"
     };
     DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1e3;
+    MAX_BACKGROUND_CONCURRENT = 5;
     DEFAULT_HUD_CONFIG = {
       preset: "focused",
       locale: "en",
@@ -20351,13 +20361,13 @@ var init_types6 = __esm({
         hostname: false,
         profile: true,
         missionBoard: false,
-        promptTime: true,
+        promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
         showTokens: true,
         useBars: true,
-        showCallCounts: true,
+        showCallCounts: false,
         showLastTool: false,
         sessionSummary: false,
         // Opt-in: sends transcript to claude -p
@@ -20430,7 +20440,7 @@ var init_types6 = __esm({
         lastSkill: true,
         contextBar: true,
         agents: true,
-        agentsFormat: "codes",
+        agentsFormat: "tasks",
         agentsMaxLines: 0,
         ioGrouping: false,
         // Compact codes line — grouping disabled
@@ -20448,7 +20458,7 @@ var init_types6 = __esm({
         showSessionDuration: true,
         showHealthIndicator: true,
         showTokens: true,
-        useBars: false,
+        useBars: true,
         showCallCounts: true,
         showLastTool: false,
         sessionSummary: false,
@@ -20513,7 +20523,7 @@ __export(background_cleanup_exports, {
   markOrphanedTasksAsStale: () => markOrphanedTasksAsStale
 });
 async function loadStateModule() {
-  return await Promise.resolve().then(() => (init_state3(), state_exports));
+  return Promise.resolve().then(() => (init_state3(), state_exports));
 }
 function getTaskStartMs(task) {
   const raw = task.startedAt ?? task.startTime;
@@ -20808,9 +20818,8 @@ function getRunningTasks(state) {
   return state.backgroundTasks.filter((task) => task.status === "running");
 }
 function getBackgroundTaskCount(state) {
-  const MAX_CONCURRENT2 = 5;
   const running = state ? state.backgroundTasks.filter((t) => t.status === "running").length : 0;
-  return { running, max: MAX_CONCURRENT2 };
+  return { running, max: MAX_BACKGROUND_CONCURRENT };
 }
 function readHudConfig() {
   const settingsFile = getSettingsFilePath();
@@ -20971,6 +20980,7 @@ var init_state3 = __esm({
     init_config_dir();
     init_worktree_paths();
     init_atomic_write();
+    init_types6();
     init_types6();
     init_mission_board();
     init_file_lock();
@@ -54080,7 +54090,7 @@ function writeBackCredentials(creds) {
         parsed.refreshToken = creds.refreshToken;
       }
     }
-    (0, import_fs111.writeFileSync)(credPath, JSON.stringify(parsed, null, 2), { mode: 384 });
+    atomicWriteFileSync(credPath, JSON.stringify(parsed, null, 2));
   } catch {
     if (process.env.OMC_DEBUG) {
       console.error("[usage-api] Failed to write back refreshed credentials");
@@ -54456,6 +54466,7 @@ var init_usage_api = __esm({
     init_types6();
     init_state3();
     init_file_lock();
+    init_atomic_write();
     CACHE_TTL_FAILURE_MS = 15 * 1e3;
     CACHE_TTL_TRANSIENT_NETWORK_MS = 2 * 60 * 1e3;
     MAX_RATE_LIMITED_BACKOFF_MS = 5 * 60 * 1e3;
@@ -55559,7 +55570,7 @@ function renderRalph(state, thresholds, labels = DEFAULT_HUD_LABELS) {
   } else {
     color = STATUS.ok;
   }
-  return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;
+  return `${DIM}${labels.ralph}:${RESET}${color}${iteration}/${maxIterations}${RESET}`;
 }
 var init_ralph2 = __esm({
   "src/hud/elements/ralph.ts"() {
@@ -56060,7 +56071,7 @@ function getContextDisplayStyle(safePercent, thresholds) {
     case "critical":
       return { color: STATUS.critical, suffix: " CRITICAL" };
     case "compact":
-      return { color: STATUS.warn, suffix: " COMPRESS?" };
+      return { color: STATUS.warn, suffix: "! compact" };
     case "warning":
       return { color: STATUS.warn, suffix: "" };
     default:
@@ -56101,7 +56112,7 @@ function getStableContextDisplayPercent(percent, thresholds, displayScope) {
 function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
   const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
-  return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
+  return `${DIM}${labels.context}:${RESET}${color}${safePercent}%${suffix}${RESET}`;
 }
 function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, labels = DEFAULT_HUD_LABELS) {
   const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
@@ -56109,7 +56120,7 @@ function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, 
   const empty = barWidth - filled;
   const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
   const bar = `${color}${"\u2588".repeat(filled)}${DIM}${"\u2591".repeat(empty)}${RESET}`;
-  return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
+  return `${DIM}${labels.context}:${RESET}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
 var CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
 var init_context = __esm({
@@ -56133,23 +56144,21 @@ function renderBackground(tasks, labels = DEFAULT_HUD_LABELS) {
     return null;
   }
   let color;
-  if (running >= MAX_CONCURRENT) {
+  if (running >= MAX_BACKGROUND_CONCURRENT) {
     color = PROGRESS.good;
-  } else if (running >= MAX_CONCURRENT - 1) {
+  } else if (running >= MAX_BACKGROUND_CONCURRENT - 1) {
     color = PROGRESS.partial;
   } else {
     color = PROGRESS.empty;
   }
-  return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
+  return `${DIM}${labels.background}:${RESET}${color}${running}/${MAX_BACKGROUND_CONCURRENT}${RESET}`;
 }
-var MAX_CONCURRENT;
 var init_background = __esm({
   "src/hud/elements/background.ts"() {
     "use strict";
     init_types6();
     init_colors();
     init_string_width();
-    MAX_CONCURRENT = 5;
   }
 });
 
@@ -56315,10 +56324,10 @@ function renderRateLimitsError(result) {
   if (!result?.error) return null;
   if (result.error === "no_credentials") return null;
   if (result.error === "rate_limited") {
-    return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
+    return result.rateLimits ? null : `${DIM}[usage:429]${RESET}`;
   }
-  if (result.error === "auth") return `${STATUS.warn}[API auth]${RESET}`;
-  return `${STATUS.warn}[API err]${RESET}`;
+  if (result.error === "auth") return `${STATUS.warn}[usage:auth]${RESET}`;
+  return `${STATUS.warn}[usage:err]${RESET}`;
 }
 function renderApiKeyUsageHint(result, apiKeyMode, hasCustomProvider) {
   if (!apiKeyMode) return null;
@@ -56410,7 +56419,7 @@ function renderSession(session, showIndicator = true) {
   if (!session) return null;
   const colorize = session.health === "critical" ? red : session.health === "warning" ? yellow : green;
   const indicator = showIndicator ? colorize(HEALTH_INDICATOR[session.health]) : "";
-  return `${indicator}session:${colorize(`${session.durationMinutes}m`)}`;
+  return `${indicator}${DIM}session:${RESET}${colorize(`${session.durationMinutes}m`)}`;
 }
 var HEALTH_INDICATOR;
 var init_session = __esm({
@@ -56426,7 +56435,7 @@ var init_session = __esm({
 });
 
 // src/hud/elements/token-usage.ts
-function splitTokenUsage(usage, sessionTotalTokens, _labels = DEFAULT_HUD_LABELS) {
+function splitTokenUsage(usage, sessionTotalTokens) {
   if (!usage) return null;
   const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
   if (!hasUsage) return null;
@@ -56443,7 +56452,6 @@ function joinTokenParts(parts) {
 var init_token_usage = __esm({
   "src/hud/elements/token-usage.ts"() {
     "use strict";
-    init_types6();
     init_formatting();
     init_colors();
   }
@@ -56919,7 +56927,7 @@ function renderMultiRepo(cwd2) {
   const info = detectMultiRepo(cwd2);
   if (!info || !info.isMultiRepo) return null;
   if (!info.hasMarker) {
-    return yellow("\u26A0 multi-repo detected") + dim(" \u2014 run: ") + cyan(`echo {} > "${info.parentName}/.omc-workspace"`) + dim(" to enable shared state");
+    return yellow("\u26A0 multi-repo (unmarked)");
   }
   const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:~")}${green(String(info.activeSessions))}` : ` ${dim("sessions:~")}${dim("0")}`;
   return `${dim("mr:")}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
@@ -57220,7 +57228,7 @@ function truncateLineToMaxWidth(line, maxWidth) {
 function wrapLineToMaxWidth(line, maxWidth) {
   if (maxWidth <= 0) return [""];
   if (stringWidth(line) <= maxWidth) return [line];
-  const separator = line.includes(DIM_SEPARATOR) ? DIM_SEPARATOR : line.includes(PLAIN_SEPARATOR) ? PLAIN_SEPARATOR : null;
+  const separator = line.includes(REGION_SEPARATOR) ? REGION_SEPARATOR : line.includes(PLAIN_REGION_SEPARATOR) ? PLAIN_REGION_SEPARATOR : line.includes(DIM_SEPARATOR) ? DIM_SEPARATOR : line.includes(PLAIN_SEPARATOR) ? PLAIN_SEPARATOR : null;
   if (!separator) {
     return [truncateLineToMaxWidth(line, maxWidth)];
   }
@@ -57398,8 +57406,7 @@ async function render(context, config2) {
     } else if (enabledElements.showTokens === true) {
       tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
-        context.sessionTotalTokens,
-        hudLabels
+        context.sessionTotalTokens
       );
       if (tokenParts && !enableGrouping) {
         rendered.set("tokens", joinTokenParts(tokenParts));
@@ -57408,8 +57415,7 @@ async function render(context, config2) {
   } else if (enabledElements.showTokens === true) {
     tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
-      context.sessionTotalTokens,
-      hudLabels
+      context.sessionTotalTokens
     );
     if (tokenParts && !enableGrouping) {
       rendered.set("tokens", joinTokenParts(tokenParts));
@@ -57565,7 +57571,7 @@ async function render(context, config2) {
       if (els.length === 0) continue;
       segments.push(`${dim(`${regionLabels[group]}: `)}${els.join(DIM_SEPARATOR)}`);
     }
-    return segments.length > 0 ? [segments.join(DIM_SEPARATOR)] : [];
+    return segments.length > 0 ? [segments.join(REGION_SEPARATOR)] : [];
   }
   function collectDetailLines(order) {
     const result = [];
@@ -57606,16 +57612,34 @@ async function render(context, config2) {
     config2.maxWidth,
     config2.wrapMode
   );
-  const limitedLines = limitOutputLines(
-    widthAdjustedLines,
-    config2.elements.maxOutputLines
-  );
+  const isNarrowTerminal = config2.maxWidth != null && config2.maxWidth > 0 && config2.maxWidth < NARROW_TERMINAL_THRESHOLD;
+  let limitedLines;
+  if (isNarrowTerminal && detailLines.length > 0 && config2.elements.maxOutputLines > 1) {
+    const mainAdjusted = applyMaxWidthByMode(outputLines, config2.maxWidth, config2.wrapMode);
+    const detailAdjusted = applyMaxWidthByMode(detailLines, config2.maxWidth, config2.wrapMode);
+    const detailBudget = Math.min(detailAdjusted.length, Math.ceil(config2.elements.maxOutputLines / 2));
+    const mainBudget = config2.elements.maxOutputLines - detailBudget;
+    const mainSlice = mainAdjusted.slice(0, mainBudget);
+    const detailSlice = detailAdjusted.slice(0, detailBudget);
+    const droppedCount = mainAdjusted.length - mainSlice.length + (detailAdjusted.length - detailSlice.length);
+    if (droppedCount > 0) {
+      const allLines = [...mainSlice, ...detailSlice];
+      limitedLines = [
+        ...allLines.slice(0, allLines.length - 1),
+        `... (+${droppedCount + 1} lines)`
+      ];
+    } else {
+      limitedLines = [...mainSlice, ...detailSlice];
+    }
+  } else {
+    limitedLines = limitOutputLines(widthAdjustedLines, config2.elements.maxOutputLines);
+  }
   const finalLines = config2.maxWidth && config2.maxWidth > 0 ? limitedLines.map(
     (line) => truncateLineToMaxWidth(line, config2.maxWidth)
   ) : limitedLines;
   return finalLines.join("\n");
 }
-var ANSI_REGEX, PLAIN_SEPARATOR, DIM_SEPARATOR, REGION_ORDER;
+var ANSI_REGEX, PLAIN_SEPARATOR, DIM_SEPARATOR, PLAIN_REGION_SEPARATOR, REGION_SEPARATOR, NARROW_TERMINAL_THRESHOLD, REGION_ORDER;
 var init_render = __esm({
   "src/hud/render.ts"() {
     "use strict";
@@ -57652,6 +57676,9 @@ var init_render = __esm({
     ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
     PLAIN_SEPARATOR = " | ";
     DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+    PLAIN_REGION_SEPARATOR = " \u254E ";
+    REGION_SEPARATOR = dim(PLAIN_REGION_SEPARATOR);
+    NARROW_TERMINAL_THRESHOLD = 70;
     REGION_ORDER = ["I", "O", "S"];
   }
 });
@@ -57661,7 +57688,12 @@ function stripAnsi2(text) {
   return text.replace(CSI_NON_SGR_REGEX, "").replace(OSC_REGEX, "").replace(SIMPLE_ESC_REGEX, "");
 }
 function replaceUnicodeBlocks(text) {
-  return text;
+  if (text.length === 0) return text;
+  let result = "";
+  for (const char of text) {
+    result += UNICODE_TO_ASCII[char] ?? char;
+  }
+  return result;
 }
 function sanitizeOutput(output) {
   let sanitized = stripAnsi2(output);
@@ -57671,13 +57703,35 @@ function sanitizeOutput(output) {
   sanitized = sanitized.replace(/^\n+|\n+$/g, "");
   return sanitized;
 }
-var CSI_NON_SGR_REGEX, OSC_REGEX, SIMPLE_ESC_REGEX;
+var CSI_NON_SGR_REGEX, OSC_REGEX, SIMPLE_ESC_REGEX, UNICODE_TO_ASCII;
 var init_sanitize = __esm({
   "src/hud/sanitize.ts"() {
     "use strict";
     CSI_NON_SGR_REGEX = /\x1b\[\??[0-9;]*[A-LN-Za-ln-z]/g;
     OSC_REGEX = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
     SIMPLE_ESC_REGEX = /\x1b[^[\]]/g;
+    UNICODE_TO_ASCII = {
+      "\u{1F527}": "Tl:",
+      // width 2 → 2 (preserved)
+      "\u{1F916}": "Ag:",
+      // width 2 → 2 (preserved)
+      "\u26A1": "Sk:",
+      // width 2 → 2 (preserved)
+      "\u{1F4AD}": "*",
+      // width 2 → 1 (narrowed — thinking bubble is decorative)
+      "\u23F1": "t:",
+      // width 2 → 2 (preserved)
+      "\u254E": "|",
+      // width 1 → 1 (preserved)
+      "\u21E1": "^",
+      // width 2 → 1 (narrowed — git ahead, ASCII has no double-width arrow)
+      "\u21E3": "v",
+      // width 2 → 1 (narrowed — git behind, ASCII has no double-width arrow)
+      "\u2191": "^",
+      // width 2 → 1 (narrowed — token input, ASCII has no double-width arrow)
+      "\u2193": "v"
+      // width 2 → 1 (narrowed — token output, ASCII has no double-width arrow)
+    };
   }
 });
 
@@ -58031,6 +58085,9 @@ async function main2(watchMode = false, skipInit = false) {
           { timeoutMs: 200, retryDelayMs: 20 }
         );
       } catch {
+        if (process.env.OMC_DEBUG) {
+          console.error("[HUD] State lock contention, falling back to unlocked write");
+        }
         persistSessionStart();
       }
     }

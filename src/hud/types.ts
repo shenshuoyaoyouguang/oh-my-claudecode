@@ -670,11 +670,11 @@ export const DEFAULT_ELEMENT_ORDER: Required<LayoutConfig> = {
   line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
   main: [
     'omcLabel', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
-    'promptTime', 'session', 'tokens', 'ralph', 'autopilot', 'prd',
+    'session', 'tokens', 'ralph', 'autopilot', 'prd',
     'skills', 'lastSkill', 'contextBar', 'agents', 'background',
-    'callCounts', 'lastTool', 'sessionSummary',
+    'lastTool', 'sessionSummary',
   ],
-  detail: ['missionBoard', 'agents', 'contextWarning', 'payloadWarning', 'todos'],
+  detail: ['missionBoard', 'agents', 'contextWarning', 'payloadWarning', 'todos', 'callCounts', 'promptTime'],
 };
 
 /** I/O/S region tags used when ioGrouping groups the main statusline. */
@@ -884,13 +884,13 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     hostname: false,
     profile: true,
     missionBoard: false,
-    promptTime: true,
+    promptTime: false,
     sessionHealth: true,
     showSessionDuration: true,
     showHealthIndicator: true,
     showTokens: true,
     useBars: true,
-    showCallCounts: true,
+    showCallCounts: false,
     showLastTool: false,
     sessionSummary: false, // Opt-in: sends transcript to claude -p
     maxOutputLines: 4,
@@ -960,7 +960,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     lastSkill: true,
     contextBar: true,
     agents: true,
-    agentsFormat: 'codes',
+    agentsFormat: 'tasks',
     agentsMaxLines: 0,
     ioGrouping: false, // Compact codes line — grouping disabled
     backgroundTasks: false,
@@ -977,7 +977,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     showSessionDuration: true,
     showHealthIndicator: true,
     showTokens: true,
-    useBars: false,
+    useBars: true,
     showCallCounts: true,
     showLastTool: false,
     sessionSummary: false,

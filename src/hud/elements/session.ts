@@ -5,7 +5,7 @@
  */
 
 import type { SessionHealth } from '../types.js';
-import { green, red, yellow } from '../colors.js';
+import { green, red, yellow, DIM, RESET } from '../colors.js';
 
 /**
  * 健康指示器字符（P0-4 补齐 showHealthIndicator 死配置）：
@@ -36,5 +36,5 @@ export function renderSession(
   const indicator = showIndicator
     ? colorize(HEALTH_INDICATOR[session.health])
     : '';
-  return `${indicator}session:${colorize(`${session.durationMinutes}m`)}`;
+  return `${indicator}${DIM}session:${RESET}${colorize(`${session.durationMinutes}m`)}`;
 }

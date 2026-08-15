@@ -33,33 +33,33 @@ describe('renderRateLimitsError', () => {
     expect(result).toBeNull();
   });
 
-  it('returns [API err] in yellow when network error', () => {
+  it('returns [usage:err] in yellow when network error', () => {
     const usageResult: UsageResult = {
       rateLimits: null,
       error: 'network',
     };
     const result = renderRateLimitsError(usageResult);
-    expect(result).toContain('[API err]');
+    expect(result).toContain('[usage:err]');
     expect(result).toContain('\x1b[33m'); // Yellow ANSI code
   });
 
-  it('returns [API err] in yellow when timeout error', () => {
+  it('returns [usage:err] in yellow when timeout error', () => {
     const usageResult: UsageResult = {
       rateLimits: null,
       error: 'timeout',
     };
     const result = renderRateLimitsError(usageResult);
-    expect(result).toContain('[API err]');
+    expect(result).toContain('[usage:err]');
     expect(result).toContain('\x1b[33m'); // Yellow ANSI code
   });
 
-  it('returns [API err] in yellow when http error', () => {
+  it('returns [usage:err] in yellow when http error', () => {
     const usageResult: UsageResult = {
       rateLimits: null,
       error: 'http',
     };
     const result = renderRateLimitsError(usageResult);
-    expect(result).toContain('[API err]');
+    expect(result).toContain('[usage:err]');
     expect(result).toContain('\x1b[33m'); // Yellow ANSI code
   });
 
@@ -72,13 +72,13 @@ describe('renderRateLimitsError', () => {
     expect(result).toContain('\x1b[0m'); // Reset ANSI code
   });
 
-  it('returns dimmed [API 429] for rate_limited error', () => {
+  it('returns dimmed [usage:429] for rate_limited error', () => {
     const usageResult: UsageResult = {
       rateLimits: null,
       error: 'rate_limited',
     };
     const result = renderRateLimitsError(usageResult);
-    expect(result).toContain('[API 429]');
+    expect(result).toContain('[usage:429]');
     expect(result).toContain('\x1b[2m'); // Dim ANSI code
     expect(result).not.toContain('\x1b[33m'); // Not yellow
   });

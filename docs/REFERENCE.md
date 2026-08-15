@@ -1261,6 +1261,26 @@ Example:
 
 Available presets: `minimal`, `focused`, `full`, `dense`, `analytics`, `opencode`
 
+#### HUD Symbol Legend
+
+The HUD uses a compact symbol vocabulary. All symbols are documented in the [README symbol legend](../README.md#developer-experience).
+
+#### HUD Preset Density
+
+Presets control main-line element density. After the v4.16 density budget update:
+
+| Preset     | Main-line elements | `callCounts` | `promptTime` | `agentsFormat` (opencode) |
+| ---------- | :----------------: | :----------: | :----------: | :-----------------------: |
+| `minimal`  | ≤4                 | off          | off          | —                         |
+| `focused`  | ≤8                 | off (detail) | off (detail) | —                         |
+| `full`     | ≤12                | on           | on           | —                         |
+| `opencode` | ≤6                 | on           | on           | `tasks` (was `codes`)     |
+| `dense`    | ≤10                | on           | on           | —                         |
+
+`callCounts` and `promptTime` moved to the `detail` group in the default layout; they render as separate lines below the main statusline when enabled. Users can restore the previous inline behavior by setting `elements.showCallCounts: true` and adding `callCounts`/`promptTime` back to `layout.main`.
+
+On narrow terminals (< 70 columns), detail lines (warnings, agents, todos) are prioritized over the main line so actionable context is never lost (B-6).
+
 ### Common Issues
 
 | Issue                 | Solution                                                                         |

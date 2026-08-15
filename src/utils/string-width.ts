@@ -63,6 +63,40 @@ export function isCJKCharacter(codePoint: number): boolean {
 }
 
 /**
+ * Check if a character code point is an emoji (double-width in most terminals).
+ *
+ * Covers:
+ * - Emoticons & Pictographs (U+1F000–U+1FAFF)
+ * - Miscellaneous Symbols & Dingbats (U+2600–U+27BF)
+ * - Miscellaneous Symbols and Arrows (U+2B00–U+2BFF)
+ */
+export function isEmojiChar(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1f000 && codePoint <= 0x1faff) ||
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+    (codePoint >= 0x2b00 && codePoint <= 0x2bff)
+  );
+}
+
+/**
+ * Check if a character code point is an ambiguous-width character.
+ *
+ * These render as double-width in CJK terminals but single-width in Western
+ * terminals. We conservatively treat them as 2 columns so truncation never
+ * overflows (R-WIDTH-2).
+ *
+ * Covers:
+ * - Arrows (U+2190–U+21FF, includes ↑↓⇡⇣)
+ * - Miscellaneous Technical (U+2300–U+23FF, includes ⏱ U+23F1)
+ */
+export function isAmbiguousChar(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x2190 && codePoint <= 0x21ff) ||
+    (codePoint >= 0x2300 && codePoint <= 0x23ff)
+  );
+}
+
+/**
  * Check if a character is a zero-width character.
  * These characters don't contribute to visual width.
  */
@@ -98,6 +132,8 @@ export function getCharWidth(char: string): number {
 
   if (isZeroWidth(codePoint)) return 0;
   if (isCJKCharacter(codePoint)) return 2;
+  if (isEmojiChar(codePoint)) return 2;
+  if (isAmbiguousChar(codePoint)) return 2;
   return 1;
 }
 

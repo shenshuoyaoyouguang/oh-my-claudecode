@@ -329,6 +329,20 @@ For `/goal` behavior, rely on Claude Code/Anthropic sources: the [Claude Code `/
 - **Magic keywords** - `ralph`, `ulw`, `ralplan`; Team stays explicit via `/team`
 - **HUD statusline** - Real-time orchestration metrics in your status bar
   - If you launch Claude Code directly with `claude --plugin-dir <path>` (bypassing the `omc` shim), export `OMC_PLUGIN_ROOT=<path>` in your shell so the HUD bundle resolves to the same checkout as the plugin loader. See the [Plugin directory flags section in REFERENCE.md](./docs/REFERENCE.md#plugin-directory-flags) for details.
+  - **Symbol legend** (HUD preset `focused` and above):
+    | Symbol | Meaning |
+    |--------|---------|
+    | `Tl:/Ag:/Sk:` | Tool / Agent / Skill call counts |
+    | `r:/tot:` | Remaining / Total session tokens |
+    | `⏱` | Agent timeout indicator |
+    | `╎` | I/O/S region boundary (ioGrouping enabled) |
+    | `|` | Element separator within a region |
+    | `↑↓` | Token input / output |
+    | `⇡⇣` | Git commits ahead / behind |
+    | `*/~` | Stale cached data marker |
+    | `●/◐/○` | Session health: critical / warning / healthy |
+    | `! compact` | Context compression suggestion (≥80%) |
+    | `[usage:err]` / `[usage:429]` / `[usage:auth]` | Usage API error / rate-limited / auth failure |
 - **Skill learning** - Extract reusable patterns from your sessions
 - **Analytics & cost tracking** - Understand token usage across all sessions
 

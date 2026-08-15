@@ -51,22 +51,45 @@ export function stripAnsi(text: string): string {
 }
 
 /**
- * Replace variable-width Unicode block characters with fixed-width ASCII equivalents.
- * Targets characters commonly used in progress bars that have inconsistent
- * terminal width across different terminal emulators.
+ * Unicode → ASCII replacement table for safeMode (R-WIDTH-3, P1-13).
  *
- * NOTE: As of Issue #3487 fix, this is intentionally a no-op.
- * Modern terminals (Windows Terminal, iTerm2, Kitty, WezTerm, VS Code terminal)
- * all handle Unicode block characters (█, ░, ▓, ▒) at the correct width.
- * The ASCII replacement destroyed visual gradient in progress bars
- * (ctx:[####------] instead of ctx:[████░░░░░░]) without fixing any real
- * terminal corruption — the width calculation in string-width.ts already
- * returns the correct value for these characters.
+ * Emoji and ambiguous-width characters render at 2 columns in most terminals
+ * but safeMode guarantees fixed-width ASCII output. Region separator ╎ (U+257E)
+ * is included so safeMode falls back to the element separator |.
  *
- * Kept as a function for API stability; callers can safely use it as a passthrough.
+ * Block characters (█░▓▒) are intentionally NOT replaced — modern terminals
+ * render them at width 1 and replacing them destroys the progress-bar gradient
+ * (see Issue #3487 fix note below).
+ */
+const UNICODE_TO_ASCII: Record<string, string> = {
+  '🔧': 'Tl:',  // width 2 → 2 (preserved)
+  '🤖': 'Ag:',  // width 2 → 2 (preserved)
+  '⚡': 'Sk:',  // width 2 → 2 (preserved)
+  '💭': '*',    // width 2 → 1 (narrowed — thinking bubble is decorative)
+  '⏱': 't:',    // width 2 → 2 (preserved)
+  '╎': '|',     // width 1 → 1 (preserved)
+  '⇡': '^',     // width 2 → 1 (narrowed — git ahead, ASCII has no double-width arrow)
+  '⇣': 'v',     // width 2 → 1 (narrowed — git behind, ASCII has no double-width arrow)
+  '↑': '^',     // width 2 → 1 (narrowed — token input, ASCII has no double-width arrow)
+  '↓': 'v',     // width 2 → 1 (narrowed — token output, ASCII has no double-width arrow)
+};
+
+/**
+ * Replace emoji/ambiguous-width/region-separator Unicode with fixed-width ASCII.
+ *
+ * Block characters (█, ░, ▓, ▒) are preserved — modern terminals handle them
+ * at the correct width and ASCII replacement destroys the progress-bar gradient.
+ *
+ * Emoji/ambiguous chars (🔧🤖⚡💭⏱⇡⇣↑↓╎) are replaced so safeMode output has
+ * deterministic column widths (R-WIDTH-3).
  */
 export function replaceUnicodeBlocks(text: string): string {
-  return text;
+  if (text.length === 0) return text;
+  let result = '';
+  for (const char of text) {
+    result += UNICODE_TO_ASCII[char] ?? char;
+  }
+  return result;
 }
 
 /**

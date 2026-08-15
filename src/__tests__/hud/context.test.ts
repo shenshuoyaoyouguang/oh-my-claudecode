@@ -39,7 +39,7 @@ describe('HUD context display smoothing', () => {
 
   it('updates immediately when a threshold bucket changes', () => {
     expect(stripAnsi(renderContext(79, thresholds, 'session-a') ?? '')).toBe('ctx:79%');
-    expect(stripAnsi(renderContext(80, thresholds, 'session-a') ?? '')).toBe('ctx:80% COMPRESS?');
+    expect(stripAnsi(renderContext(80, thresholds, 'session-a') ?? '')).toBe('ctx:80%! compact');
   });
 
   it('applies the same smoothing to the bar display', () => {

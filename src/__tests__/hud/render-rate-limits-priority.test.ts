@@ -87,9 +87,9 @@ describe('render: rate limits display priority', () => {
     });
 
     const output = await render(context, makeConfig());
-    // Should show percentage data, NOT [API 429]
+    // Should show percentage data, NOT [usage:429]
     expect(output).toContain('45%');
-    expect(output).not.toContain('[API 429]');
+    expect(output).not.toContain('[usage:429]');
   });
 
   it('renders 5h/wk/sn rate limits when subscription info is unavailable', async () => {
@@ -306,7 +306,7 @@ describe('render: rate limits display priority', () => {
     expect(output).not.toContain('wk:');
   });
 
-  it('shows [API 429] when error=rate_limited and rateLimits is null', async () => {
+  it('shows [usage:429] when error=rate_limited and rateLimits is null', async () => {
     const context = makeContext({
       rateLimitsResult: {
         rateLimits: null,
@@ -315,10 +315,10 @@ describe('render: rate limits display priority', () => {
     });
 
     const output = await render(context, makeConfig());
-    expect(output).toContain('[API 429]');
+    expect(output).toContain('[usage:429]');
   });
 
-  it('shows [API err] when error=network and rateLimits is null', async () => {
+  it('shows [usage:err] when error=network and rateLimits is null', async () => {
     const context = makeContext({
       rateLimitsResult: {
         rateLimits: null,
@@ -327,10 +327,10 @@ describe('render: rate limits display priority', () => {
     });
 
     const output = await render(context, makeConfig());
-    expect(output).toContain('[API err]');
+    expect(output).toContain('[usage:err]');
   });
 
-  it('shows stale cached data instead of [API err] when transient failures still have usage data', async () => {
+  it('shows stale cached data instead of [usage:err] when transient failures still have usage data', async () => {
     const context = makeContext({
       rateLimitsResult: {
         rateLimits: { fiveHourPercent: 61, weeklyPercent: 22 },
@@ -342,10 +342,10 @@ describe('render: rate limits display priority', () => {
     const output = await render(context, makeConfig());
     expect(output).toContain('61%');
     expect(output).toContain('*');
-    expect(output).not.toContain('[API err]');
+    expect(output).not.toContain('[usage:err]');
   });
 
-  it('shows [API auth] when error=auth and rateLimits is null', async () => {
+  it('shows [usage:auth] when error=auth and rateLimits is null', async () => {
     const context = makeContext({
       rateLimitsResult: {
         rateLimits: null,
@@ -354,7 +354,7 @@ describe('render: rate limits display priority', () => {
     });
 
     const output = await render(context, makeConfig());
-    expect(output).toContain('[API auth]');
+    expect(output).toContain('[usage:auth]');
   });
 
   it('shows data normally when no error', async () => {

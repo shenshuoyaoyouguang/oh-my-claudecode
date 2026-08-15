@@ -35,7 +35,7 @@ export function renderBackground(
     color = PROGRESS.empty; // Plenty of room
   }
 
-  return `${labels.background}:${color}${running}/${MAX_BACKGROUND_CONCURRENT}${RESET}`;
+  return `${DIM}${labels.background}:${RESET}${color}${running}/${MAX_BACKGROUND_CONCURRENT}${RESET}`;
 }
 
 /**
@@ -75,5 +75,5 @@ export function renderBackgroundDetailed(
   });
 
   const suffix = running.length > 3 ? ',+' + (running.length - 3) : '';
-  return `${labels.background}:${color}${running.length}/${MAX_BACKGROUND_CONCURRENT}${RESET} ${DIM}[${descriptions.join(',')}${suffix}]${RESET}`;
+  return `${DIM}${labels.background}:${RESET}${color}${running.length}/${MAX_BACKGROUND_CONCURRENT}${RESET} ${DIM}[${descriptions.join(',')}${suffix}]${RESET}`;
 }

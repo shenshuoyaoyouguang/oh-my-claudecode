@@ -112,8 +112,8 @@ describe('showCallCounts config option', () => {
     expect(PRESET_CONFIGS.minimal.showCallCounts).toBe(false);
   });
 
-  it('focused preset enables showCallCounts', () => {
-    expect(PRESET_CONFIGS.focused.showCallCounts).toBe(true);
+  it('focused preset disables showCallCounts (B-4 density budget)', () => {
+    expect(PRESET_CONFIGS.focused.showCallCounts).toBe(false);
   });
 
   it('full preset enables showCallCounts', () => {

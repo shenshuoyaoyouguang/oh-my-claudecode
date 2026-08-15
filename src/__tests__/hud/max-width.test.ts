@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { truncateLineToMaxWidth } from '../../hud/render.js';
-import { stringWidth } from '../../utils/string-width.js';
+import { stringWidth, getCharWidth } from '../../utils/string-width.js';
 
 describe('truncateLineToMaxWidth', () => {
   describe('basic truncation', () => {
@@ -134,7 +134,7 @@ describe('truncateLineToMaxWidth', () => {
     });
 
     it('handles emoji-only content', () => {
-      // Each emoji is width 1 in our getCharWidth (not CJK). 10 emoji = 10 columns.
+      // Each emoji is width 2 in getCharWidth (B-1, P1-13). 10 emoji = 20 columns.
       const line = '\uD83D\uDE00\uD83D\uDE01\uD83D\uDE02\uD83D\uDE03\uD83D\uDE04\uD83D\uDE05\uD83D\uDE06\uD83D\uDE07\uD83D\uDE08\uD83D\uDE09';
       const result = truncateLineToMaxWidth(line, 6);
       expect(result).toMatch(/\.\.\.$/);
@@ -168,6 +168,41 @@ describe('truncateLineToMaxWidth', () => {
       const result = truncateLineToMaxWidth(line, 15);
       expect(result).toMatch(/\.\.\.$/);
       expect(stringWidth(result)).toBeLessThanOrEqual(15);
+    });
+  });
+
+  describe('emoji and ambiguous width (B-1)', () => {
+    it('emoji char has width 2', () => {
+      expect(getCharWidth('🔧')).toBe(2);
+      expect(getCharWidth('🤖')).toBe(2);
+    });
+
+    it('ambiguous char has width 2', () => {
+      expect(getCharWidth('⇡')).toBe(2);
+      expect(getCharWidth('⏱')).toBe(2);
+    });
+
+    it('token-usage arrows ↑↓ have width 2 (regression: U+2190 range)', () => {
+      // ↑ U+2191 and ↓ U+2193 are in the Arrows block U+2190–U+21FF.
+      // Previously isAmbiguousChar started at U+21A0, missing these.
+      expect(getCharWidth('↑')).toBe(2);
+      expect(getCharWidth('↓')).toBe(2);
+    });
+
+    it('ASCII char has width 1 (regression)', () => {
+      expect(getCharWidth('a')).toBe(1);
+      expect(getCharWidth(' ')).toBe(1);
+    });
+
+    it('emoji + ASCII mixed truncation', () => {
+      const line = '🔧🤖hello';
+      const result = truncateLineToMaxWidth(line, 5);
+      expect(result).toMatch(/\.\.\.$/);
+      expect(stringWidth(result)).toBeLessThanOrEqual(5);
+    });
+
+    it('CJK + emoji mixed width', () => {
+      expect(stringWidth('你🔧')).toBe(4);
     });
   });
 });
