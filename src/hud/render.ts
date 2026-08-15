@@ -698,17 +698,40 @@ export async function render(
 
   /** Collect inline elements grouped into I/O/S regions (ioGrouping enabled).
    *  Each element is bucketed by DEFAULT_REGION_MAP (falling back to Status),
-   *  `tokens` is split so input+session land in I, output+r in O,
-   *  and `omcLabel` stays an untagged leading brand prefix. A dimmed region tag
-   *  is prefixed to the first content of each non-empty region. */
+   *  `tokens` is split so input+session land in I, output+reasoning in O,
+   *  and `omcLabel` stays an untagged leading brand prefix.
+   *
+   *  Region tag rules (排版 P0-①/④):
+   *  - 区域标签只为该区第一个"裸值"(无自带 label 的元素,如 token 数字)提供语义。
+   *  - 元素自带 label 的(模型:/缓存:/上下文:/会话:)排在裸值之后,
+   *    区域不再重复贴标签,避免 `状态: 模型:` 这类双重标签连排。
+   *  - 因此 tokens 拆分出的 input/output 必须排到各自区域首位,
+   *    使 `输入:`/`输出:` 区域标签恰好充当它们的语义标签。
+   */
   function collectInlineWithRegions(order: string[]): string[] {
-    const regions: Record<HudRegionGroup, string[]> = { I: [], O: [], S: [] };
+    interface RegionEntry {
+      els: string[];
+      /** 区域第一个元素是否为裸值(无自带标签)——决定是否渲染区域标签 */
+      firstBare: boolean;
+    }
+    const regions: Record<HudRegionGroup, RegionEntry> = {
+      I: { els: [], firstBare: false },
+      O: { els: [], firstBare: false },
+      S: { els: [], firstBare: false },
+    };
     const prefix: string[] = [];
     const regionLabels: Record<HudRegionGroup, string> = {
       I: hudLabels.input,
       O: hudLabels.output,
       S: hudLabels.status,
     };
+
+    /** 追加元素到区域;bare=true 表示无自带 label 的裸值(如 token 数字)。 */
+    function pushToRegion(group: HudRegionGroup, el: string, bare = false): void {
+      const region = regions[group];
+      if (region.els.length === 0) region.firstBare = bare;
+      region.els.push(el);
+    }
 
     for (const name of order) {
       if (name === 'omcLabel') {
@@ -720,14 +743,15 @@ export async function render(
         if (!tokenParts) continue;
         // input + session total both land in I (单次输入与累计并列);
         // output + reasoning land in O; S no longer carries token parts.
+        // 元素间用 DIM_SEPARATOR 分隔,避免 `2.2k 累计:67.4k` 黏连(排版 P0-②)。
         const input = [tokenParts.input, tokenParts.session]
           .filter((p): p is string => p !== null)
-          .join(' ');
-        regions.I.push(input);
+          .join(DIM_SEPARATOR);
+        if (input) pushToRegion('I', input, true);
         const output = [tokenParts.output, tokenParts.reasoning]
           .filter((p): p is string => p !== null)
-          .join(' ');
-        if (output) regions.O.push(output);
+          .join(DIM_SEPARATOR);
+        if (output) pushToRegion('O', output, true);
         continue;
       }
 
@@ -738,15 +762,21 @@ export async function render(
         if (lines && lines.length > 0) el = lines.join(' ');
       }
       if (el) {
-        regions[DEFAULT_REGION_MAP[name] ?? 'S'].push(el);
+        // 自带标签的元素(模型/缓存/上下文/会话/限额等)标记为非裸值;
+        // thinking 是"进行中"状态词(无自带 label),标记为裸值以便区域标签可作其语义。
+        const bare = name === 'thinking';
+        pushToRegion(DEFAULT_REGION_MAP[name] ?? 'S', el, bare);
       }
     }
 
     const segments: string[] = [...prefix];
     for (const group of REGION_ORDER) {
-      const els = regions[group];
-      if (els.length === 0) continue;
-      segments.push(`${dim(`${regionLabels[group]}: `)}${els.join(DIM_SEPARATOR)}`);
+      const region = regions[group];
+      if (region.els.length === 0) continue;
+      const label = region.firstBare
+        ? `${dim(`${regionLabels[group]}: `)}`
+        : '';
+      segments.push(`${label}${region.els.join(DIM_SEPARATOR)}`);
     }
     // Return a single joined line (or an empty array) so the caller's
     // array contract (`elements.join(...)`) is preserved.

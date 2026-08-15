@@ -624,22 +624,25 @@ describe('token usage rendering', () => {
 
     expect(plain).toContain('I:');
     expect(plain).toContain('O:');
-    expect(plain).toContain('S:');
+    // S 区第一个元素是 model(自带标签)→ 区域标签省略,不出现 `S:`
+    expect(plain).toContain('Model: Sonnet 4.5');
+    expect(plain).not.toContain('S:');
 
     // Region order is Input → Output → Status:
     // input + session total in I (累计前移), output+reasoning in O.
     const iIdx = plain.indexOf('I:');
     const oIdx = plain.indexOf('O:');
-    const sIdx = plain.indexOf('S:');
     const inputIdx = plain.indexOf('1.3k');
     const sessionIdx = plain.indexOf('tot:6.6k');
-    const outputIdx = plain.indexOf('340 r:120');
+    const outputIdx = plain.indexOf('340');
     expect(inputIdx).toBeGreaterThan(iIdx);
     expect(inputIdx).toBeLessThan(oIdx);
     expect(sessionIdx).toBeGreaterThan(iIdx);
     expect(sessionIdx).toBeLessThan(oIdx);
+    // 元素间用分隔符连接,不黏连(排版 P0-②)
+    expect(plain).toContain('1.3k | tot:6.6k');
     expect(outputIdx).toBeGreaterThan(oIdx);
-    expect(outputIdx).toBeLessThan(sIdx);
+    expect(outputIdx).toBeLessThan(plain.indexOf('Model:'));
   });
 
   it('buckets elements by region map even when a custom layout mixes regions', async () => {
@@ -659,8 +662,8 @@ describe('token usage rendering', () => {
     expect(plain.indexOf('ctx:30%')).toBeGreaterThan(plain.indexOf('I:'));
     expect(plain.indexOf('ctx:30%')).toBeLessThan(plain.indexOf('O:'));
     expect(plain).toContain('O:');
-    expect(plain).toContain('340 r:120');
-    expect(plain.indexOf('Model: Sonnet 4.5')).toBeGreaterThan(plain.indexOf('S:'));
+    expect(plain).toContain('340 | r:120');
+    expect(plain).toContain('Model: Sonnet 4.5');
   });
 });
 

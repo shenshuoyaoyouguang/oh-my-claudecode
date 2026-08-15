@@ -198,12 +198,14 @@ describe('HUD labels', () => {
 
     expect(output).toContain('输入:');
     expect(output).toContain('输出:');
-    expect(output).toContain('状态:');
+    // S 区首元素 model 自带标签 → 区域标签省略,不出现 `状态: `(排版 P0-④)
+    expect(output).toContain('模型: Sonnet 4.5');
+    expect(output).not.toContain('状态: 模型:');
     // token parts are split: input under 输入, output under 输出
     expect(output.indexOf('1.5k')).toBeGreaterThan(output.indexOf('输入:'));
     expect(output.indexOf('1.5k')).toBeLessThan(output.indexOf('输出:'));
     expect(output.indexOf('987')).toBeGreaterThan(output.indexOf('输出:'));
-    expect(output.indexOf('987')).toBeLessThan(output.indexOf('状态:'));
+    expect(output.indexOf('987')).toBeLessThan(output.indexOf('模型:'));
     // 累计用量已前移至 I 区：位于输入 token 之后、输出区域之前
     expect(output).toContain('累计:');
     expect(output.indexOf('累计:')).toBeGreaterThan(output.indexOf('1.5k'));

@@ -712,8 +712,8 @@ export interface LayoutConfig {
 export const DEFAULT_ELEMENT_ORDER: Required<LayoutConfig> = {
   line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
   main: [
-    'omcLabel', 'cacheRate', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
-    'session', 'tokens', 'ralph', 'autopilot', 'prd',
+    'omcLabel', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
+    'session', 'tokens', 'cacheRate', 'ralph', 'autopilot', 'prd',
     'skills', 'lastSkill', 'contextBar', 'agents', 'background',
     'lastTool', 'sessionSummary',
   ],
@@ -734,7 +734,8 @@ export type HudRegionGroup = 'I' | 'O' | 'S';
  */
 export const DEFAULT_REGION_MAP: Record<string, HudRegionGroup> = {
   contextBar: 'I',
-  thinking: 'O',
+  // thinking 是"进行中"状态(活动光谱),归状态区;不混入 O 区 token 统计(排版 P0-③)
+  thinking: 'S',
   agents: 'O',
   lastTool: 'O',
   lastSkill: 'O',

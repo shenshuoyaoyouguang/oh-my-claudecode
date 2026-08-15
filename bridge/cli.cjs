@@ -20166,7 +20166,6 @@ var init_types6 = __esm({
       line1: ["hostname", "cwd", "gitRepo", "gitBranch", "gitStatus", "apiKeySource", "profile"],
       main: [
         "omcLabel",
-        "cacheRate",
         "model",
         "enterpriseCost",
         "rateLimits",
@@ -20175,6 +20174,7 @@ var init_types6 = __esm({
         "thinking",
         "session",
         "tokens",
+        "cacheRate",
         "ralph",
         "autopilot",
         "prd",
@@ -20190,7 +20190,8 @@ var init_types6 = __esm({
     };
     DEFAULT_REGION_MAP = {
       contextBar: "I",
-      thinking: "O",
+      // thinking 是"进行中"状态(活动光谱),归状态区;不混入 O 区 token 统计(排版 P0-③)
+      thinking: "S",
       agents: "O",
       lastTool: "O",
       lastSkill: "O",
@@ -57611,13 +57612,22 @@ async function render(context, config2) {
     return result;
   }
   function collectInlineWithRegions(order) {
-    const regions = { I: [], O: [], S: [] };
+    const regions = {
+      I: { els: [], firstBare: false },
+      O: { els: [], firstBare: false },
+      S: { els: [], firstBare: false }
+    };
     const prefix = [];
     const regionLabels = {
       I: hudLabels.input,
       O: hudLabels.output,
       S: hudLabels.status
     };
+    function pushToRegion(group, el, bare = false) {
+      const region = regions[group];
+      if (region.els.length === 0) region.firstBare = bare;
+      region.els.push(el);
+    }
     for (const name of order) {
       if (name === "omcLabel") {
         const el2 = rendered.get(name);
@@ -57626,10 +57636,10 @@ async function render(context, config2) {
       }
       if (name === "tokens") {
         if (!tokenParts) continue;
-        const input = [tokenParts.input, tokenParts.session].filter((p) => p !== null).join(" ");
-        regions.I.push(input);
-        const output = [tokenParts.output, tokenParts.reasoning].filter((p) => p !== null).join(" ");
-        if (output) regions.O.push(output);
+        const input = [tokenParts.input, tokenParts.session].filter((p) => p !== null).join(DIM_SEPARATOR);
+        if (input) pushToRegion("I", input, true);
+        const output = [tokenParts.output, tokenParts.reasoning].filter((p) => p !== null).join(DIM_SEPARATOR);
+        if (output) pushToRegion("O", output, true);
         continue;
       }
       let el = rendered.get(name);
@@ -57638,14 +57648,16 @@ async function render(context, config2) {
         if (lines && lines.length > 0) el = lines.join(" ");
       }
       if (el) {
-        regions[DEFAULT_REGION_MAP[name] ?? "S"].push(el);
+        const bare = name === "thinking";
+        pushToRegion(DEFAULT_REGION_MAP[name] ?? "S", el, bare);
       }
     }
     const segments = [...prefix];
     for (const group of REGION_ORDER) {
-      const els = regions[group];
-      if (els.length === 0) continue;
-      segments.push(`${dim(`${regionLabels[group]}: `)}${els.join(DIM_SEPARATOR)}`);
+      const region = regions[group];
+      if (region.els.length === 0) continue;
+      const label = region.firstBare ? `${dim(`${regionLabels[group]}: `)}` : "";
+      segments.push(`${label}${region.els.join(DIM_SEPARATOR)}`);
     }
     return segments.length > 0 ? [segments.join(REGION_SEPARATOR)] : [];
   }
