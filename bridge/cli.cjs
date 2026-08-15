@@ -20194,7 +20194,7 @@ var init_types6 = __esm({
       agents: "O",
       lastTool: "O",
       lastSkill: "O",
-      cacheRate: "S",
+      cacheRate: "I",
       model: "S",
       enterpriseCost: "S",
       rateLimits: "S",

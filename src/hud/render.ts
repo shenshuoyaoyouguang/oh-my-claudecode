@@ -505,7 +505,7 @@ export async function render(
     if (prompt) rendered.set("promptTime", prompt);
   }
 
-  // Cache hit rate (S region, first element) — null when stdin has no cache data
+  // Cache hit rate (I region, before tokens) — null when stdin has no cache data
   if (enabledElements.cacheRate && context.cacheUsage) {
     const cache = renderCacheRate(context.cacheUsage, hudLabels);
     if (cache) rendered.set("cacheRate", cache);

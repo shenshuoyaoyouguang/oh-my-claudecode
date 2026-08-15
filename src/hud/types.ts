@@ -738,7 +738,7 @@ export const DEFAULT_REGION_MAP: Record<string, HudRegionGroup> = {
   agents: 'O',
   lastTool: 'O',
   lastSkill: 'O',
-  cacheRate: 'S',
+  cacheRate: 'I',
   model: 'S',
   enterpriseCost: 'S',
   rateLimits: 'S',
