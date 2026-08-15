@@ -19703,9 +19703,17 @@ function writeState(directory, state, sessionId) {
   if (!(0, import_node_fs3.existsSync)(stateDir)) {
     (0, import_node_fs3.mkdirSync)(stateDir, { recursive: true });
   }
-  withFileLockSync(writePath + ".lock", () => {
+  const writeStateLocked = () => {
     atomicWriteJsonSync(writePath, state);
-  });
+  };
+  try {
+    withFileLockSync(writePath + ".lock", writeStateLocked, {
+      timeoutMs: 200,
+      retryDelayMs: 20
+    });
+  } catch {
+    writeStateLocked();
+  }
   return state;
 }
 function parseTime(value) {
@@ -20075,7 +20083,7 @@ function resolveHudLabels(locale, labels) {
     ...sanitizeHudLabels(labels)
   };
 }
-var DEFAULT_HUD_LABELS, HUD_LOCALE_LABELS, HUD_LABEL_KEYS, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, DEFAULT_HUD_CONFIG, PRESET_CONFIGS;
+var DEFAULT_HUD_LABELS, HUD_LOCALE_LABELS, HUD_LABEL_KEYS, DEFAULT_ELEMENT_ORDER, DEFAULT_REGION_MAP, DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, DEFAULT_HUD_CONFIG, PRESET_CONFIGS;
 var init_types6 = __esm({
   "src/hud/types.ts"() {
     "use strict";
@@ -20083,9 +20091,12 @@ var init_types6 = __esm({
     DEFAULT_HUD_LABELS = {
       context: "ctx",
       tokens: "tok",
-      tool: "T",
-      agent: "A",
-      skill: "S",
+      tool: "Tl",
+      // P0-3：原 'T'，与 agent 编码 analyst/test-engineer 冲突；Tl=tool
+      agent: "Ag",
+      // P0-3：原 'A'，与 agent 编码 architect 冲突；Ag=agent
+      skill: "Sk",
+      // P0-3：原 'S'，与 agent 编码 scientist 冲突；Sk=skill
       ralph: "ralph",
       background: "bg",
       thinking: "thinking",
@@ -20094,7 +20105,10 @@ var init_types6 = __esm({
       modified: "!",
       untracked: "?",
       ahead: "\u21E1",
-      behind: "\u21E3"
+      behind: "\u21E3",
+      input: "I",
+      output: "O",
+      status: "S"
     };
     HUD_LOCALE_LABELS = {
       en: DEFAULT_HUD_LABELS,
@@ -20112,7 +20126,10 @@ var init_types6 = __esm({
         modified: "\u5DF2\u4FEE\u6539",
         untracked: "\u672A\u8DDF\u8E2A",
         ahead: "\u9886\u5148",
-        behind: "\u843D\u540E"
+        behind: "\u843D\u540E",
+        input: "\u8F93\u5165",
+        output: "\u8F93\u51FA",
+        status: "\u72B6\u6001"
       }
     };
     HUD_LABEL_KEYS = Object.freeze(
@@ -20144,6 +20161,27 @@ var init_types6 = __esm({
         "sessionSummary"
       ],
       detail: ["missionBoard", "agents", "contextWarning", "payloadWarning", "todos"]
+    };
+    DEFAULT_REGION_MAP = {
+      contextBar: "I",
+      thinking: "O",
+      agents: "O",
+      lastTool: "O",
+      lastSkill: "O",
+      model: "S",
+      enterpriseCost: "S",
+      rateLimits: "S",
+      customBuckets: "S",
+      permission: "S",
+      promptTime: "S",
+      session: "S",
+      ralph: "S",
+      autopilot: "S",
+      prd: "S",
+      skills: "S",
+      background: "S",
+      callCounts: "S",
+      sessionSummary: "S"
     };
     DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1e3;
     DEFAULT_HUD_CONFIG = {
@@ -20202,7 +20240,9 @@ var init_types6 = __esm({
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
+        ioGrouping: false,
+        // Disabled in the raw default (presets opt in per their density)
         useBars: false,
         // Disabled by default for backwards compatibility
         showCallCounts: true,
@@ -20219,7 +20259,8 @@ var init_types6 = __esm({
       thresholds: {
         contextWarning: 70,
         contextCompactSuggestion: 80,
-        contextCritical: 85,
+        contextCritical: 90,
+        // 与 rate limits 统一（P0-1）；原 85
         ralphWarning: 7
       },
       staleTaskThresholdMinutes: 10,
@@ -20254,6 +20295,8 @@ var init_types6 = __esm({
         agents: true,
         agentsFormat: "count",
         agentsMaxLines: 0,
+        ioGrouping: false,
+        // Compact single line — grouping disabled
         backgroundTasks: false,
         todos: true,
         permissionStatus: false,
@@ -20267,7 +20310,7 @@ var init_types6 = __esm({
         sessionHealth: false,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
         useBars: false,
         showCallCounts: false,
         showLastTool: false,
@@ -20297,6 +20340,8 @@ var init_types6 = __esm({
         agents: true,
         agentsFormat: "multiline",
         agentsMaxLines: 3,
+        ioGrouping: true,
+        // Grouped into I/O/S regions (default preset)
         backgroundTasks: true,
         todos: true,
         permissionStatus: false,
@@ -20310,7 +20355,7 @@ var init_types6 = __esm({
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
         useBars: true,
         showCallCounts: true,
         showLastTool: false,
@@ -20341,6 +20386,8 @@ var init_types6 = __esm({
         agents: true,
         agentsFormat: "multiline",
         agentsMaxLines: 10,
+        ioGrouping: true,
+        // Grouped into I/O/S regions
         backgroundTasks: true,
         todos: true,
         permissionStatus: false,
@@ -20354,7 +20401,7 @@ var init_types6 = __esm({
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
         useBars: true,
         showCallCounts: true,
         showLastTool: false,
@@ -20385,6 +20432,8 @@ var init_types6 = __esm({
         agents: true,
         agentsFormat: "codes",
         agentsMaxLines: 0,
+        ioGrouping: false,
+        // Compact codes line — grouping disabled
         backgroundTasks: false,
         todos: true,
         permissionStatus: false,
@@ -20398,7 +20447,7 @@ var init_types6 = __esm({
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
         useBars: false,
         showCallCounts: true,
         showLastTool: false,
@@ -20428,6 +20477,8 @@ var init_types6 = __esm({
         agents: true,
         agentsFormat: "multiline",
         agentsMaxLines: 5,
+        ioGrouping: true,
+        // Grouped into I/O/S regions
         backgroundTasks: true,
         todos: true,
         permissionStatus: false,
@@ -20441,7 +20492,7 @@ var init_types6 = __esm({
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
-        showTokens: false,
+        showTokens: true,
         useBars: true,
         showCallCounts: true,
         showLastTool: false,
@@ -20455,13 +20506,23 @@ var init_types6 = __esm({
 });
 
 // src/hud/background-cleanup.ts
+var background_cleanup_exports = {};
+__export(background_cleanup_exports, {
+  cleanupStaleBackgroundTasks: () => cleanupStaleBackgroundTasks,
+  detectOrphanedTasks: () => detectOrphanedTasks,
+  markOrphanedTasksAsStale: () => markOrphanedTasksAsStale
+});
+async function loadStateModule() {
+  return await Promise.resolve().then(() => (init_state3(), state_exports));
+}
 function getTaskStartMs(task) {
   const raw = task.startedAt ?? task.startTime;
   if (!raw) return NaN;
   return new Date(raw).getTime();
 }
 async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRESHOLD_MS, directory, sessionId) {
-  const state = readHudState(directory, sessionId);
+  const { readHudState: readHudState2, writeHudState: writeHudState2 } = await loadStateModule();
+  const state = readHudState2(directory, sessionId);
   if (!state || !state.backgroundTasks) {
     return 0;
   }
@@ -20502,12 +20563,13 @@ async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRESHOLD_MS
   const removedCount = originalCount - state.backgroundTasks.length;
   if (removedCount > 0 || statusChanged) {
     state.timestamp = (/* @__PURE__ */ new Date()).toISOString();
-    writeHudState(state, directory, sessionId);
+    writeHudState2(state, directory, sessionId);
   }
   return removedCount;
 }
 async function detectOrphanedTasks(directory, sessionId) {
-  const state = readHudState(directory, sessionId);
+  const { readHudState: readHudState2 } = await loadStateModule();
+  const state = readHudState2(directory, sessionId);
   if (!state || !state.backgroundTasks) {
     return [];
   }
@@ -20524,7 +20586,8 @@ async function detectOrphanedTasks(directory, sessionId) {
   return orphaned;
 }
 async function markOrphanedTasksAsStale(directory, sessionId) {
-  const state = readHudState(directory, sessionId);
+  const { readHudState: readHudState2, writeHudState: writeHudState2 } = await loadStateModule();
+  const state = readHudState2(directory, sessionId);
   if (!state || !state.backgroundTasks) {
     return 0;
   }
@@ -20538,7 +20601,7 @@ async function markOrphanedTasksAsStale(directory, sessionId) {
     }
   }
   if (marked > 0) {
-    writeHudState(state, directory, sessionId);
+    writeHudState2(state, directory, sessionId);
   }
   return marked;
 }
@@ -20546,12 +20609,24 @@ var STALE_TASK_THRESHOLD_MS;
 var init_background_cleanup = __esm({
   "src/hud/background-cleanup.ts"() {
     "use strict";
-    init_state3();
     STALE_TASK_THRESHOLD_MS = 30 * 60 * 1e3;
   }
 });
 
 // src/hud/state.ts
+var state_exports = {};
+__export(state_exports, {
+  applyPreset: () => applyPreset,
+  createEmptyHudState: () => createEmptyHudState,
+  getBackgroundTaskCount: () => getBackgroundTaskCount,
+  getHudStateLockPath: () => getHudStateLockPath,
+  getRunningTasks: () => getRunningTasks,
+  initializeHUDState: () => initializeHUDState,
+  readHudConfig: () => readHudConfig,
+  readHudState: () => readHudState,
+  writeHudConfig: () => writeHudConfig,
+  writeHudState: () => writeHudState
+});
 function getLocalStateFilePath(directory) {
   const baseDir = validateWorkingDirectory(directory);
   const omcStateDir = (0, import_path62.join)(getOmcRoot(baseDir), "state");
@@ -20567,6 +20642,9 @@ function getStateFilePath3(directory, sessionId) {
     return resolveSessionStatePath("hud", sessionId, baseDir);
   }
   return getLocalStateFilePath(baseDir);
+}
+function getHudStateLockPath(directory, sessionId) {
+  return `${getStateFilePath3(directory, sessionId)}.lock`;
 }
 function getSettingsFilePath() {
   return (0, import_path62.join)(getClaudeConfigDir(), "settings.json");
@@ -20610,6 +20688,15 @@ function mergeMissionBoardConfig(primary, secondary) {
     ...primary ?? {},
     ...secondary ?? {}
   };
+}
+function mergeElementsForWrite(legacyElements, nextElements) {
+  const merged = { ...legacyElements ?? {} };
+  for (const [key, value] of Object.entries(nextElements)) {
+    const defaultValue = DEFAULT_HUD_CONFIG.elements[key];
+    const legacyValue = legacyElements?.[key];
+    merged[key] = value === defaultValue && legacyValue !== void 0 ? legacyValue : value;
+  }
+  return merged;
 }
 function ensureStateDir(directory) {
   const baseDir = validateWorkingDirectory(directory);
@@ -20669,31 +20756,39 @@ function readHudState(directory, sessionId) {
   }
   return null;
 }
-function writeHudState(state, directory, sessionId) {
+function writeHudState(state, directory, sessionId, options) {
   try {
     ensureHudStateDir(directory, sessionId);
     const stateFile = getStateFilePath3(directory, sessionId);
-    const nextState = sessionId ? { ...state, sessionId } : state;
-    atomicWriteJsonSync(stateFile, nextState);
-    if (sessionId) {
-      const legacyCandidates = [
-        getLegacyRootStateFilePath(directory)
-      ];
-      for (const legacyFile of legacyCandidates) {
-        if (!(0, import_fs52.existsSync)(legacyFile)) {
-          continue;
-        }
-        try {
-          const content = (0, import_fs52.readFileSync)(legacyFile, "utf-8");
-          const legacyState = JSON.parse(content);
-          if (!legacyState.sessionId || legacyState.sessionId === sessionId) {
-            (0, import_fs52.unlinkSync)(legacyFile);
+    const lockPath2 = getHudStateLockPath(directory, sessionId);
+    const useLock = options?.lock !== false;
+    const writeAndCleanup = () => {
+      const nextState = sessionId ? { ...state, sessionId } : state;
+      atomicWriteJsonSync(stateFile, nextState);
+      if (sessionId) {
+        const legacyCandidates = [
+          getLegacyRootStateFilePath(directory)
+        ];
+        for (const legacyFile of legacyCandidates) {
+          if (!(0, import_fs52.existsSync)(legacyFile)) {
+            continue;
           }
-        } catch {
+          try {
+            const content = (0, import_fs52.readFileSync)(legacyFile, "utf-8");
+            const legacyState = JSON.parse(content);
+            if (!legacyState.sessionId || legacyState.sessionId === sessionId) {
+              (0, import_fs52.unlinkSync)(legacyFile);
+            }
+          } catch {
+          }
         }
       }
+      return true;
+    };
+    if (useLock) {
+      return withFileLockSync(lockPath2, writeAndCleanup);
     }
-    return true;
+    return writeAndCleanup();
   } catch (error2) {
     console.error(
       "[HUD] Failed to write state:",
@@ -20711,6 +20806,11 @@ function createEmptyHudState() {
 function getRunningTasks(state) {
   if (!state) return [];
   return state.backgroundTasks.filter((task) => task.status === "running");
+}
+function getBackgroundTaskCount(state) {
+  const MAX_CONCURRENT2 = 5;
+  const running = state ? state.backgroundTasks.filter((t) => t.status === "running").length : 0;
+  return { running, max: MAX_CONCURRENT2 };
 }
 function readHudConfig() {
   const settingsFile = getSettingsFilePath();
@@ -20799,9 +20899,63 @@ function mergeWithDefaults(config2) {
     ...config2.layout ? { layout: config2.layout } : {}
   };
 }
+function writeHudConfig(config2) {
+  try {
+    const settingsFile = getSettingsFilePath();
+    const legacyConfig = getLegacyHudConfig();
+    let settings = {};
+    if ((0, import_fs52.existsSync)(settingsFile)) {
+      const content = (0, import_fs52.readFileSync)(settingsFile, "utf-8");
+      settings = JSON.parse(content);
+    }
+    const mergedConfig = mergeWithDefaults({
+      ...legacyConfig,
+      ...config2,
+      elements: mergeElementsForWrite(legacyConfig?.elements, config2.elements),
+      thresholds: mergeThresholds(legacyConfig?.thresholds, config2.thresholds),
+      contextLimitWarning: mergeContextLimitWarning(
+        legacyConfig?.contextLimitWarning,
+        config2.contextLimitWarning
+      ),
+      missionBoard: mergeMissionBoardConfig(
+        legacyConfig?.missionBoard,
+        config2.missionBoard
+      ),
+      locale: isHudLocale(config2.locale) ? config2.locale : legacyConfig?.locale,
+      labels: {
+        ...sanitizeHudLabels(legacyConfig?.labels),
+        ...sanitizeHudLabels(config2.labels)
+      }
+    });
+    settings.omcHud = mergedConfig;
+    atomicWriteFileSync(settingsFile, JSON.stringify(settings, null, 2));
+    return true;
+  } catch (error2) {
+    console.error(
+      "[HUD] Failed to write config:",
+      error2 instanceof Error ? error2.message : error2
+    );
+    return false;
+  }
+}
+function applyPreset(preset) {
+  const config2 = readHudConfig();
+  const presetElements = PRESET_CONFIGS[preset];
+  const newConfig = {
+    ...config2,
+    preset,
+    elements: {
+      ...config2.elements,
+      ...presetElements
+    }
+  };
+  writeHudConfig(newConfig);
+  return newConfig;
+}
 async function initializeHUDState(directory, sessionId) {
-  const removedStale = await cleanupStaleBackgroundTasks(void 0, directory, sessionId);
-  const markedOrphaned = await markOrphanedTasksAsStale(directory, sessionId);
+  const { cleanupStaleBackgroundTasks: cleanupStaleBackgroundTasks2, markOrphanedTasksAsStale: markOrphanedTasksAsStale2 } = await Promise.resolve().then(() => (init_background_cleanup(), background_cleanup_exports));
+  const removedStale = await cleanupStaleBackgroundTasks2(void 0, directory, sessionId);
+  const markedOrphaned = await markOrphanedTasksAsStale2(directory, sessionId);
   if (removedStale > 0 || markedOrphaned > 0) {
     console.error(
       `HUD cleanup: removed ${removedStale} stale tasks, marked ${markedOrphaned} orphaned tasks`
@@ -20819,7 +20973,7 @@ var init_state3 = __esm({
     init_atomic_write();
     init_types6();
     init_mission_board();
-    init_background_cleanup();
+    init_file_lock();
   }
 });
 
@@ -53643,23 +53797,36 @@ function readKeychainCredentials() {
   return expiredFallback;
 }
 function readFileCredentials() {
-  try {
-    const credPath = (0, import_path131.join)(getClaudeConfigDir(), ".credentials.json");
-    if (!(0, import_fs111.existsSync)(credPath)) return null;
-    const content = (0, import_fs111.readFileSync)(credPath, "utf-8");
-    const parsed = JSON.parse(content);
-    const creds = parsed.claudeAiOauth || parsed;
-    if (creds.accessToken) {
-      return {
-        accessToken: creds.accessToken,
-        expiresAt: creds.expiresAt,
-        refreshToken: creds.refreshToken,
-        source: "file",
-        subscriptionType: creds.subscriptionType,
-        rateLimitTier: creds.rateLimitTier
-      };
+  const candidates = [];
+  candidates.push((0, import_path131.join)(getClaudeConfigDir(), ".credentials.json"));
+  if (process.platform === "win32") {
+    const appData = process.env["APPDATA"];
+    if (appData) {
+      candidates.push((0, import_path131.join)(appData, "Claude", "code_credentials.json"));
     }
-  } catch {
+    const localAppData = process.env["LOCALAPPDATA"];
+    if (localAppData && localAppData !== appData) {
+      candidates.push((0, import_path131.join)(localAppData, "Claude", "code_credentials.json"));
+    }
+  }
+  for (const credPath of candidates) {
+    try {
+      if (!(0, import_fs111.existsSync)(credPath)) continue;
+      const content = (0, import_fs111.readFileSync)(credPath, "utf-8");
+      const parsed = JSON.parse(content);
+      const creds = parsed.claudeAiOauth || parsed;
+      if (creds.accessToken) {
+        return {
+          accessToken: creds.accessToken,
+          expiresAt: creds.expiresAt,
+          refreshToken: creds.refreshToken,
+          source: "file",
+          subscriptionType: creds.subscriptionType,
+          rateLimitTier: creds.rateLimitTier
+        };
+      }
+    } catch {
+    }
   }
   return null;
 }
@@ -53913,19 +54080,7 @@ function writeBackCredentials(creds) {
         parsed.refreshToken = creds.refreshToken;
       }
     }
-    const tmpPath = `${credPath}.tmp.${process.pid}`;
-    try {
-      (0, import_fs111.writeFileSync)(tmpPath, JSON.stringify(parsed, null, 2), { mode: 384 });
-      (0, import_fs111.renameSync)(tmpPath, credPath);
-    } catch (writeErr) {
-      try {
-        if ((0, import_fs111.existsSync)(tmpPath)) {
-          (0, import_fs111.unlinkSync)(tmpPath);
-        }
-      } catch {
-      }
-      throw writeErr;
-    }
+    (0, import_fs111.writeFileSync)(credPath, JSON.stringify(parsed, null, 2), { mode: 384 });
   } catch {
     if (process.env.OMC_DEBUG) {
       console.error("[usage-api] Failed to write back refreshed credentials");
@@ -55017,53 +55172,11 @@ function resolveStatePath2(directory, filename, sessionId) {
     const sessionPath = (0, import_path142.join)(omcRoot, "state", "sessions", sessionId, filename);
     return (0, import_fs122.existsSync)(sessionPath) ? sessionPath : null;
   }
-  let bestPath = null;
-  let bestMtime = 0;
-  const sessionsDir = (0, import_path142.join)(omcRoot, "state", "sessions");
-  if ((0, import_fs122.existsSync)(sessionsDir)) {
-    try {
-      const entries = (0, import_fs122.readdirSync)(sessionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const sessionFile = (0, import_path142.join)(sessionsDir, entry.name, filename);
-        if ((0, import_fs122.existsSync)(sessionFile)) {
-          try {
-            const mtime = (0, import_fs122.statSync)(sessionFile).mtimeMs;
-            if (mtime > bestMtime) {
-              bestMtime = mtime;
-              bestPath = sessionFile;
-            }
-          } catch {
-          }
-        }
-      }
-    } catch {
-    }
-  }
   const newPath = (0, import_path142.join)(omcRoot, "state", filename);
-  if ((0, import_fs122.existsSync)(newPath)) {
-    try {
-      const mtime = (0, import_fs122.statSync)(newPath).mtimeMs;
-      if (mtime > bestMtime) {
-        bestMtime = mtime;
-        bestPath = newPath;
-      }
-    } catch {
-      if (!bestPath) bestPath = newPath;
-    }
-  }
+  if ((0, import_fs122.existsSync)(newPath)) return newPath;
   const legacyPath = (0, import_path142.join)(omcRoot, filename);
-  if ((0, import_fs122.existsSync)(legacyPath)) {
-    try {
-      const mtime = (0, import_fs122.statSync)(legacyPath).mtimeMs;
-      if (mtime > bestMtime) {
-        bestPath = legacyPath;
-      }
-    } catch {
-      if (!bestPath) bestPath = legacyPath;
-    }
-  }
-  return bestPath;
+  if ((0, import_fs122.existsSync)(legacyPath)) return legacyPath;
+  return null;
 }
 function readRalphStateForHud(directory, sessionId) {
   const stateFile = resolveStatePath2(directory, "ralph-state.json", sessionId);
@@ -55354,19 +55467,29 @@ function red(text) {
 function cyan(text) {
   return `${CYAN}${text}${RESET}`;
 }
-function dim(text) {
-  return `${DIM}${text}${RESET}`;
+function magenta(text) {
+  return `${MAGENTA}${text}${RESET}`;
 }
-function bold(text) {
-  return `${BOLD}${text}${RESET}`;
+function brightCyan(text) {
+  return `${BRIGHT_CYAN}${text}${RESET}`;
+}
+function activity(text) {
+  return `${ACTIVITY.running}${text}${RESET}`;
+}
+function getTodoColor(completed, total) {
+  if (total === 0) return DIM;
+  const percent = completed / total * 100;
+  if (percent >= 80) return GREEN;
+  if (percent >= 1) return CYAN;
+  return DIM;
 }
 function getModelTierColor(model) {
-  if (!model) return CYAN;
+  if (!model) return TIER.unknown;
   const tier = model.toLowerCase();
-  if (tier.includes("opus")) return MAGENTA;
-  if (tier.includes("sonnet")) return YELLOW;
-  if (tier.includes("haiku")) return GREEN;
-  return CYAN;
+  if (tier.includes("opus")) return TIER.opus;
+  if (tier.includes("sonnet")) return TIER.sonnet;
+  if (tier.includes("haiku")) return TIER.haiku;
+  return TIER.unknown;
 }
 function getDurationColor(durationMs) {
   const minutes = durationMs / 6e4;
@@ -55374,7 +55497,7 @@ function getDurationColor(durationMs) {
   if (minutes >= 2) return YELLOW;
   return GREEN;
 }
-var RESET, DIM, BOLD, RED, GREEN, YELLOW, MAGENTA, CYAN;
+var RESET, DIM, BOLD, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, BRIGHT_BLUE, BRIGHT_CYAN, STATUS, ACTIVITY, TIER, PROGRESS, dim, bold, white, PERCENT_WARN, PERCENT_CRITICAL;
 var init_colors = __esm({
   "src/hud/colors.ts"() {
     "use strict";
@@ -55384,8 +55507,39 @@ var init_colors = __esm({
     RED = "\x1B[31m";
     GREEN = "\x1B[32m";
     YELLOW = "\x1B[33m";
+    BLUE = "\x1B[34m";
     MAGENTA = "\x1B[35m";
     CYAN = "\x1B[36m";
+    WHITE = "\x1B[37m";
+    BRIGHT_BLUE = "\x1B[94m";
+    BRIGHT_CYAN = "\x1B[96m";
+    STATUS = {
+      ok: GREEN,
+      notice: BRIGHT_CYAN,
+      warn: YELLOW,
+      critical: RED
+    };
+    ACTIVITY = {
+      running: MAGENTA,
+      done: GREEN,
+      failed: RED
+    };
+    TIER = {
+      opus: BRIGHT_BLUE,
+      sonnet: BLUE,
+      haiku: CYAN,
+      unknown: WHITE
+    };
+    PROGRESS = {
+      good: GREEN,
+      partial: CYAN,
+      empty: DIM
+    };
+    dim = (text) => `${DIM}${text}${RESET}`;
+    bold = (text) => `${BOLD}${text}${RESET}`;
+    white = (text) => `${WHITE}${text}${RESET}`;
+    PERCENT_WARN = 70;
+    PERCENT_CRITICAL = 90;
   }
 });
 
@@ -55399,23 +55553,19 @@ function renderRalph(state, thresholds, labels = DEFAULT_HUD_LABELS) {
   const criticalThreshold = Math.floor(maxIterations * 0.9);
   let color;
   if (iteration >= criticalThreshold) {
-    color = RED2;
+    color = STATUS.critical;
   } else if (iteration >= warningThreshold) {
-    color = YELLOW2;
+    color = STATUS.warn;
   } else {
-    color = GREEN2;
+    color = STATUS.ok;
   }
   return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;
 }
-var RED2, YELLOW2, GREEN2;
 var init_ralph2 = __esm({
   "src/hud/elements/ralph.ts"() {
     "use strict";
     init_types6();
     init_colors();
-    RED2 = "\x1B[31m";
-    YELLOW2 = "\x1B[33m";
-    GREEN2 = "\x1B[32m";
   }
 });
 
@@ -55448,7 +55598,7 @@ function formatDuration4(durationMs) {
   } else if (minutes < 10) {
     return `(${minutes}m)`;
   } else {
-    return "!";
+    return "\u23F1";
   }
 }
 function renderAgents(agents) {
@@ -55484,9 +55634,9 @@ function renderAgentsCodedWithDuration(agents) {
     const durationMs = now - a.startTime.getTime();
     const duration3 = formatDuration4(durationMs);
     const modelColor = getModelTierColor(a.model);
-    if (duration3 === "!") {
+    if (duration3 === "\u23F1") {
       const durationColor = getDurationColor(durationMs);
-      return `${modelColor}${code}${durationColor}!${RESET}`;
+      return `${modelColor}${code}${durationColor}\u23F1${RESET}`;
     } else if (duration3) {
       return `${modelColor}${code}${dim(duration3)}${RESET}`;
     } else {
@@ -55606,11 +55756,11 @@ function renderAgentsWithDescriptions(agents) {
     const durationMs = now - a.startTime.getTime();
     const duration3 = formatDuration4(durationMs);
     let entry = `${color}${code}${RESET}:${dim(label)}`;
-    if (duration3 && duration3 !== "!") {
+    if (duration3 && duration3 !== "\u23F1") {
       entry += dim(duration3);
-    } else if (duration3 === "!") {
+    } else if (duration3 === "\u23F1") {
       const durationColor = getDurationColor(durationMs);
-      entry += `${durationColor}!${RESET}`;
+      entry += `${durationColor}\u23F1${RESET}`;
     }
     return entry;
   });
@@ -55628,9 +55778,9 @@ function renderAgentsDescOnly(agents) {
     const desc = a.description ? truncateDescription(a.description, 20) : shortName;
     const durationMs = now - a.startTime.getTime();
     const duration3 = formatDuration4(durationMs);
-    if (duration3 === "!") {
+    if (duration3 === "\u23F1") {
       const durationColor = getDurationColor(durationMs);
-      return `${color}${desc}${durationColor}!${RESET}`;
+      return `${color}${desc}${durationColor}\u23F1${RESET}`;
     } else if (duration3) {
       return `${color}${desc}${dim(duration3)}${RESET}`;
     }
@@ -55815,6 +55965,9 @@ var init_agents = __esm({
 });
 
 // src/hud/elements/todos.ts
+function getProgressColor(completed, total) {
+  return getTodoColor(completed, total);
+}
 function renderTodosWithCurrent(todos) {
   if (todos.length === 0) {
     return null;
@@ -55822,33 +55975,20 @@ function renderTodosWithCurrent(todos) {
   const completed = todos.filter((t) => t.status === "completed").length;
   const total = todos.length;
   const inProgress = todos.find((t) => t.status === "in_progress");
-  const percent = completed / total * 100;
-  let color;
-  if (percent >= 80) {
-    color = GREEN3;
-  } else if (percent >= 50) {
-    color = YELLOW3;
-  } else {
-    color = CYAN3;
-  }
+  const color = getProgressColor(completed, total);
   let result = `todos:${color}${completed}/${total}${RESET}`;
   if (inProgress) {
     const activeText = inProgress.activeForm || inProgress.content || "...";
     const truncated = truncateToWidth(activeText, 30);
-    result += ` ${DIM2}(working: ${truncated})${RESET}`;
+    result += ` ${DIM}(working: ${truncated})${RESET}`;
   }
   return result;
 }
-var GREEN3, YELLOW3, CYAN3, DIM2;
 var init_todos = __esm({
   "src/hud/elements/todos.ts"() {
     "use strict";
     init_colors();
     init_string_width();
-    GREEN3 = "\x1B[32m";
-    YELLOW3 = "\x1B[33m";
-    CYAN3 = "\x1B[36m";
-    DIM2 = "\x1B[2m";
   }
 });
 
@@ -55918,13 +56058,13 @@ function getContextDisplayStyle(safePercent, thresholds) {
   const severity = getContextSeverity(safePercent, thresholds);
   switch (severity) {
     case "critical":
-      return { color: RED3, suffix: " CRITICAL" };
+      return { color: STATUS.critical, suffix: " CRITICAL" };
     case "compact":
-      return { color: YELLOW4, suffix: " COMPRESS?" };
+      return { color: STATUS.warn, suffix: " COMPRESS?" };
     case "warning":
-      return { color: YELLOW4, suffix: "" };
+      return { color: STATUS.warn, suffix: "" };
     default:
-      return { color: GREEN4, suffix: "" };
+      return safePercent >= 30 ? { color: STATUS.notice, suffix: "" } : { color: STATUS.ok, suffix: "" };
   }
 }
 function getStableContextDisplayPercent(percent, thresholds, displayScope) {
@@ -55968,19 +56108,15 @@ function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, 
   const filled = Math.round(safePercent / 100 * barWidth);
   const empty = barWidth - filled;
   const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
-  const bar = `${color}${"\u2588".repeat(filled)}${DIM3}${"\u2591".repeat(empty)}${RESET}`;
+  const bar = `${color}${"\u2588".repeat(filled)}${DIM}${"\u2591".repeat(empty)}${RESET}`;
   return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
-var GREEN4, YELLOW4, RED3, DIM3, CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
+var CONTEXT_DISPLAY_HYSTERESIS, CONTEXT_DISPLAY_STATE_TTL_MS, lastDisplayedPercent, lastDisplayedSeverity, lastDisplayScope, lastDisplayUpdatedAt;
 var init_context = __esm({
   "src/hud/elements/context.ts"() {
     "use strict";
     init_types6();
     init_colors();
-    GREEN4 = "\x1B[32m";
-    YELLOW4 = "\x1B[33m";
-    RED3 = "\x1B[31m";
-    DIM3 = "\x1B[2m";
     CONTEXT_DISPLAY_HYSTERESIS = 2;
     CONTEXT_DISPLAY_STATE_TTL_MS = 5e3;
     lastDisplayedPercent = null;
@@ -55998,24 +56134,21 @@ function renderBackground(tasks, labels = DEFAULT_HUD_LABELS) {
   }
   let color;
   if (running >= MAX_CONCURRENT) {
-    color = YELLOW5;
+    color = PROGRESS.good;
   } else if (running >= MAX_CONCURRENT - 1) {
-    color = CYAN4;
+    color = PROGRESS.partial;
   } else {
-    color = GREEN5;
+    color = PROGRESS.empty;
   }
   return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
 }
-var CYAN4, GREEN5, YELLOW5, MAX_CONCURRENT;
+var MAX_CONCURRENT;
 var init_background = __esm({
   "src/hud/elements/background.ts"() {
     "use strict";
     init_types6();
     init_colors();
     init_string_width();
-    CYAN4 = "\x1B[36m";
-    GREEN5 = "\x1B[32m";
-    YELLOW5 = "\x1B[33m";
     MAX_CONCURRENT = 5;
   }
 });
@@ -56027,31 +56160,28 @@ function renderPrd(state) {
   }
   const { currentStoryId, completed, total } = state;
   if (completed === total) {
-    return `${GREEN6}PRD:done${RESET}`;
+    return `${STATUS.ok}PRD:done${RESET}`;
   }
   if (currentStoryId) {
-    return `${CYAN5}${currentStoryId}${RESET}`;
+    return `${dim("PRD:")}${PROGRESS.partial}${currentStoryId}${RESET}`;
   }
   return null;
 }
-var CYAN5, GREEN6;
 var init_prd2 = __esm({
   "src/hud/elements/prd.ts"() {
     "use strict";
     init_colors();
-    CYAN5 = "\x1B[36m";
-    GREEN6 = "\x1B[32m";
   }
 });
 
 // src/hud/elements/limits.ts
 function getColor(percent) {
   if (percent >= CRITICAL_THRESHOLD2) {
-    return RED4;
+    return STATUS.critical;
   } else if (percent >= WARNING_THRESHOLD) {
-    return YELLOW6;
+    return STATUS.warn;
   }
-  return GREEN7;
+  return STATUS.ok;
 }
 function formatResetTime(date3) {
   if (!date3) return null;
@@ -56071,71 +56201,71 @@ function formatResetTime(date3) {
 }
 function renderRateLimits(limits, stale) {
   if (!limits) return null;
-  const staleMarker = stale ? `${DIM4}*${RESET}` : "";
+  const staleMarker = stale ? `${DIM}*${RESET}` : "";
   const resetPrefix = stale ? "~" : "";
   const fiveHour = Math.min(100, Math.max(0, Math.round(limits.fiveHourPercent)));
   const fiveHourColor = getColor(fiveHour);
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
-  const fiveHourPart = fiveHourReset ? `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${fiveHourReset})${RESET}` : `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+  const fiveHourPart = fiveHourReset ? `${DIM}5h:${RESET}${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}` : `${DIM}5h:${RESET}${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
   const parts = [fiveHourPart];
   if (limits.weeklyPercent != null) {
     const weekly = Math.min(100, Math.max(0, Math.round(limits.weeklyPercent)));
     const weeklyColor = getColor(weekly);
     const weeklyReset = formatResetTime(limits.weeklyResetsAt);
-    const weeklyPart = weeklyReset ? `${DIM4}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${weeklyReset})${RESET}` : `${DIM4}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+    const weeklyPart = weeklyReset ? `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}` : `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}`;
     parts.push(weeklyPart);
   }
   if (limits.monthlyPercent != null) {
     const monthly = Math.min(100, Math.max(0, Math.round(limits.monthlyPercent)));
     const monthlyColor = getColor(monthly);
     const monthlyReset = formatResetTime(limits.monthlyResetsAt);
-    const monthlyPart = monthlyReset ? `${DIM4}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${monthlyReset})${RESET}` : `${DIM4}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+    const monthlyPart = monthlyReset ? `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}` : `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}`;
     parts.push(monthlyPart);
   }
   if (limits.sonnetWeeklyPercent != null) {
     const sonnet = Math.min(100, Math.max(0, Math.round(limits.sonnetWeeklyPercent)));
     const sonnetColor = getColor(sonnet);
     const sonnetReset = formatResetTime(limits.sonnetWeeklyResetsAt);
-    const sonnetPart = sonnetReset ? `${DIM4}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${sonnetReset})${RESET}` : `${DIM4}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
+    const sonnetPart = sonnetReset ? `${DIM}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}` : `${DIM}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
     parts.push(sonnetPart);
   }
   if (limits.opusWeeklyPercent != null) {
     const opus = Math.min(100, Math.max(0, Math.round(limits.opusWeeklyPercent)));
     const opusColor = getColor(opus);
     const opusReset = formatResetTime(limits.opusWeeklyResetsAt);
-    const opusPart = opusReset ? `${DIM4}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${opusReset})${RESET}` : `${DIM4}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}`;
+    const opusPart = opusReset ? `${DIM}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}` : `${DIM}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}`;
     parts.push(opusPart);
   }
   if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
     const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
     const extraColor = getColor(extra);
     const extraReset = formatResetTime(limits.extraUsageResetsAt);
-    const dollarPart = `${DIM4}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
-    const extraPart = extraReset ? `${DIM4}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM4}(${resetPrefix}${extraReset})${RESET}` : `${DIM4}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
+    const dollarPart = `${DIM}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
+    const extraPart = extraReset ? `${DIM}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}` : `${DIM}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
     parts.push(extraPart);
   }
   return parts.join(" ");
 }
 function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
   if (!limits) return null;
-  const staleMarker = stale ? `${DIM4}*${RESET}` : "";
+  const staleMarker = stale ? `${DIM}*${RESET}` : "";
   const resetPrefix = stale ? "~" : "";
   const fiveHour = Math.min(100, Math.max(0, Math.round(limits.fiveHourPercent)));
   const fiveHourColor = getColor(fiveHour);
   const fiveHourFilled = Math.round(fiveHour / 100 * barWidth);
   const fiveHourEmpty = barWidth - fiveHourFilled;
-  const fiveHourBar = `${fiveHourColor}${"\u2588".repeat(fiveHourFilled)}${DIM4}${"\u2591".repeat(fiveHourEmpty)}${RESET}`;
+  const fiveHourBar = `${fiveHourColor}${"\u2588".repeat(fiveHourFilled)}${DIM}${"\u2591".repeat(fiveHourEmpty)}${RESET}`;
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
-  const fiveHourPart = fiveHourReset ? `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${fiveHourReset})${RESET}` : `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+  const fiveHourPart = fiveHourReset ? `${DIM}5h:${RESET}[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}` : `${DIM}5h:${RESET}[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
   const parts = [fiveHourPart];
   if (limits.weeklyPercent != null) {
     const weekly = Math.min(100, Math.max(0, Math.round(limits.weeklyPercent)));
     const weeklyColor = getColor(weekly);
     const weeklyFilled = Math.round(weekly / 100 * barWidth);
     const weeklyEmpty = barWidth - weeklyFilled;
-    const weeklyBar = `${weeklyColor}${"\u2588".repeat(weeklyFilled)}${DIM4}${"\u2591".repeat(weeklyEmpty)}${RESET}`;
+    const weeklyBar = `${weeklyColor}${"\u2588".repeat(weeklyFilled)}${DIM}${"\u2591".repeat(weeklyEmpty)}${RESET}`;
     const weeklyReset = formatResetTime(limits.weeklyResetsAt);
-    const weeklyPart = weeklyReset ? `${DIM4}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${weeklyReset})${RESET}` : `${DIM4}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+    const weeklyPart = weeklyReset ? `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}` : `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}`;
     parts.push(weeklyPart);
   }
   if (limits.monthlyPercent != null) {
@@ -56143,9 +56273,9 @@ function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     const monthlyColor = getColor(monthly);
     const monthlyFilled = Math.round(monthly / 100 * barWidth);
     const monthlyEmpty = barWidth - monthlyFilled;
-    const monthlyBar = `${monthlyColor}${"\u2588".repeat(monthlyFilled)}${DIM4}${"\u2591".repeat(monthlyEmpty)}${RESET}`;
+    const monthlyBar = `${monthlyColor}${"\u2588".repeat(monthlyFilled)}${DIM}${"\u2591".repeat(monthlyEmpty)}${RESET}`;
     const monthlyReset = formatResetTime(limits.monthlyResetsAt);
-    const monthlyPart = monthlyReset ? `${DIM4}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${monthlyReset})${RESET}` : `${DIM4}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+    const monthlyPart = monthlyReset ? `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}` : `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}`;
     parts.push(monthlyPart);
   }
   if (limits.sonnetWeeklyPercent != null) {
@@ -56153,9 +56283,9 @@ function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     const sonnetColor = getColor(sonnet);
     const sonnetFilled = Math.round(sonnet / 100 * barWidth);
     const sonnetEmpty = barWidth - sonnetFilled;
-    const sonnetBar = `${sonnetColor}${"\u2588".repeat(sonnetFilled)}${DIM4}${"\u2591".repeat(sonnetEmpty)}${RESET}`;
+    const sonnetBar = `${sonnetColor}${"\u2588".repeat(sonnetFilled)}${DIM}${"\u2591".repeat(sonnetEmpty)}${RESET}`;
     const sonnetReset = formatResetTime(limits.sonnetWeeklyResetsAt);
-    const sonnetPart = sonnetReset ? `${DIM4}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${sonnetReset})${RESET}` : `${DIM4}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
+    const sonnetPart = sonnetReset ? `${DIM}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}` : `${DIM}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
     parts.push(sonnetPart);
   }
   if (limits.opusWeeklyPercent != null) {
@@ -56163,9 +56293,9 @@ function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     const opusColor = getColor(opus);
     const opusFilled = Math.round(opus / 100 * barWidth);
     const opusEmpty = barWidth - opusFilled;
-    const opusBar = `${opusColor}${"\u2588".repeat(opusFilled)}${DIM4}${"\u2591".repeat(opusEmpty)}${RESET}`;
+    const opusBar = `${opusColor}${"\u2588".repeat(opusFilled)}${DIM}${"\u2591".repeat(opusEmpty)}${RESET}`;
     const opusReset = formatResetTime(limits.opusWeeklyResetsAt);
-    const opusPart = opusReset ? `${DIM4}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}${DIM4}(${resetPrefix}${opusReset})${RESET}` : `${DIM4}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}`;
+    const opusPart = opusReset ? `${DIM}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}` : `${DIM}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}`;
     parts.push(opusPart);
   }
   if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
@@ -56173,10 +56303,10 @@ function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     const extraColor = getColor(extra);
     const extraFilled = Math.round(extra / 100 * barWidth);
     const extraEmpty = barWidth - extraFilled;
-    const extraBar = `${extraColor}${"\u2588".repeat(extraFilled)}${DIM4}${"\u2591".repeat(extraEmpty)}${RESET}`;
+    const extraBar = `${extraColor}${"\u2588".repeat(extraFilled)}${DIM}${"\u2591".repeat(extraEmpty)}${RESET}`;
     const extraReset = formatResetTime(limits.extraUsageResetsAt);
-    const dollarPart = `${DIM4}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
-    const extraPart = extraReset ? `${DIM4}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM4}(${resetPrefix}${extraReset})${RESET}` : `${DIM4}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
+    const dollarPart = `${DIM}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
+    const extraPart = extraReset ? `${DIM}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}` : `${DIM}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
     parts.push(extraPart);
   }
   return parts.join(" ");
@@ -56185,16 +56315,16 @@ function renderRateLimitsError(result) {
   if (!result?.error) return null;
   if (result.error === "no_credentials") return null;
   if (result.error === "rate_limited") {
-    return result.rateLimits ? null : `${DIM4}[API 429]${RESET}`;
+    return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
   }
-  if (result.error === "auth") return `${YELLOW6}[API auth]${RESET}`;
-  return `${YELLOW6}[API err]${RESET}`;
+  if (result.error === "auth") return `${STATUS.warn}[API auth]${RESET}`;
+  return `${STATUS.warn}[API err]${RESET}`;
 }
 function renderApiKeyUsageHint(result, apiKeyMode, hasCustomProvider) {
   if (!apiKeyMode) return null;
   if (hasCustomProvider) return null;
   if (result?.error !== "no_credentials") return null;
-  return `${DIM4}[usage: set omcHud.rateLimitsProvider]${RESET}`;
+  return `${DIM}[usage: set omcHud.rateLimitsProvider]${RESET}`;
 }
 function bucketUsagePercent(usage) {
   if (usage.type === "percent") return usage.value;
@@ -56208,10 +56338,10 @@ function renderBucketUsageValue(usage) {
 }
 function renderCustomBuckets(result, thresholdPercent = 85) {
   if (result.error && result.buckets.length === 0) {
-    return `${YELLOW6}[cmd:err]${RESET}`;
+    return `${STATUS.warn}[cmd:err]${RESET}`;
   }
   if (result.buckets.length === 0) return null;
-  const staleMarker = result.stale ? `${DIM4}*${RESET}` : "";
+  const staleMarker = result.stale ? `${DIM}*${RESET}` : "";
   const parts = result.buckets.map((bucket) => {
     const pct = bucketUsagePercent(bucket.usage);
     const color = pct != null ? getColor(pct) : "";
@@ -56222,24 +56352,20 @@ function renderCustomBuckets(result, thresholdPercent = 85) {
       const d = new Date(bucket.resetsAt);
       if (!isNaN(d.getTime())) {
         const str = formatResetTime(d);
-        if (str) resetPart = `${DIM4}(${str})${RESET}`;
+        if (str) resetPart = `${DIM}(${str})${RESET}`;
       }
     }
-    return `${DIM4}${bucket.label}:${RESET}${color}${usageStr}${colorReset}${staleMarker}${resetPart}`;
+    return `${DIM}${bucket.label}:${RESET}${color}${usageStr}${colorReset}${staleMarker}${resetPart}`;
   });
   return parts.join(" ");
 }
-var GREEN7, YELLOW6, RED4, DIM4, WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
+var WARNING_THRESHOLD, CRITICAL_THRESHOLD2;
 var init_limits = __esm({
   "src/hud/elements/limits.ts"() {
     "use strict";
     init_colors();
-    GREEN7 = "\x1B[32m";
-    YELLOW6 = "\x1B[33m";
-    RED4 = "\x1B[31m";
-    DIM4 = "\x1B[2m";
-    WARNING_THRESHOLD = 70;
-    CRITICAL_THRESHOLD2 = 90;
+    WARNING_THRESHOLD = PERCENT_WARN;
+    CRITICAL_THRESHOLD2 = PERCENT_CRITICAL;
   }
 });
 
@@ -56266,63 +56392,68 @@ function renderThinking(state, format = "text", labels = DEFAULT_HUD_LABELS) {
     case "face":
       return "\u{1F914}";
     case "text":
-      return `${CYAN6}${labels.thinking}${RESET}`;
+      return activity(labels.thinking);
     default:
       return "\u{1F4AD}";
   }
 }
-var CYAN6;
 var init_thinking = __esm({
   "src/hud/elements/thinking.ts"() {
     "use strict";
     init_types6();
     init_colors();
-    CYAN6 = "\x1B[36m";
   }
 });
 
 // src/hud/elements/session.ts
-function renderSession(session) {
+function renderSession(session, showIndicator = true) {
   if (!session) return null;
   const colorize = session.health === "critical" ? red : session.health === "warning" ? yellow : green;
-  return `session:${colorize(`${session.durationMinutes}m`)}`;
+  const indicator = showIndicator ? colorize(HEALTH_INDICATOR[session.health]) : "";
+  return `${indicator}session:${colorize(`${session.durationMinutes}m`)}`;
 }
+var HEALTH_INDICATOR;
 var init_session = __esm({
   "src/hud/elements/session.ts"() {
     "use strict";
     init_colors();
+    HEALTH_INDICATOR = {
+      critical: "\u25CF",
+      warning: "\u25D0",
+      healthy: "\u25CB"
+    };
   }
 });
 
 // src/hud/elements/token-usage.ts
-function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS) {
+function splitTokenUsage(usage, sessionTotalTokens, _labels = DEFAULT_HUD_LABELS) {
   if (!usage) return null;
   const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
   if (!hasUsage) return null;
-  const parts = [
-    `${labels.tokens}:i${formatTokenCount(usage.inputTokens)}/o${formatTokenCount(usage.outputTokens)}`
-  ];
-  if (usage.reasoningTokens && usage.reasoningTokens > 0) {
-    parts.push(`r${formatTokenCount(usage.reasoningTokens)}`);
-  }
-  if (sessionTotalTokens && sessionTotalTokens > 0) {
-    parts.push(`s${formatTokenCount(sessionTotalTokens)}`);
-  }
-  return parts.join(" ");
+  return {
+    input: `${white(`\u2191${formatTokenCount(usage.inputTokens)}`)}`,
+    output: `${white(`\u2193${formatTokenCount(usage.outputTokens)}`)}`,
+    reasoning: usage.reasoningTokens && usage.reasoningTokens > 0 ? `${magenta(`r:${formatTokenCount(usage.reasoningTokens)}`)}` : null,
+    session: sessionTotalTokens && sessionTotalTokens > 0 ? `${cyan(`tot:${formatTokenCount(sessionTotalTokens)}`)}` : null
+  };
+}
+function joinTokenParts(parts) {
+  return [parts.input, parts.output, parts.reasoning, parts.session].filter((p) => p !== null).join(" ");
 }
 var init_token_usage = __esm({
   "src/hud/elements/token-usage.ts"() {
     "use strict";
     init_types6();
     init_formatting();
+    init_colors();
   }
 });
 
 // src/hud/elements/enterprise-cost.ts
 function getColor2(percent) {
-  if (percent >= CRITICAL_THRESHOLD3) return RED5;
-  if (percent >= WARNING_THRESHOLD2) return YELLOW7;
-  return GREEN8;
+  if (percent >= CRITICAL_THRESHOLD3) return STATUS.critical;
+  if (percent >= WARNING_THRESHOLD2) return STATUS.warn;
+  return STATUS.ok;
 }
 function formatMoney(amount, decimals) {
   const [intPart, decPart] = amount.toFixed(decimals).split(".");
@@ -56334,31 +56465,27 @@ function currencyPrefix(currency) {
 }
 function renderEnterpriseCost(limits, stale) {
   if (!limits || limits.enterpriseSpentUsd === void 0) return null;
-  const staleMarker = stale ? `${DIM5}*${RESET}` : "";
+  const staleMarker = stale ? `${DIM}*${RESET}` : "";
   const currency = limits.enterpriseCurrency ?? "USD";
   const prefix = currencyPrefix(currency);
   const decimals = limits.enterpriseDecimalPlaces ?? 2;
   const spentStr = formatMoney(limits.enterpriseSpentUsd, decimals);
   if (limits.enterpriseLimitUsd == null) {
-    return `${DIM5}spent:${RESET}${prefix}${spentStr}${staleMarker}`;
+    return `${DIM}spent:${RESET}${prefix}${spentStr}${staleMarker}`;
   }
   const limitStr = formatMoney(limits.enterpriseLimitUsd, decimals);
   const utilization = limits.enterpriseUtilization ?? 0;
   const rounded = Math.min(100, Math.max(0, Math.round(utilization)));
   const color = getColor2(rounded);
-  return `${DIM5}spent:${RESET}${prefix}${spentStr}/${prefix}${limitStr} ${color}(${rounded}%)${RESET}${staleMarker}`;
+  return `${DIM}spent:${RESET}${prefix}${spentStr}/${prefix}${limitStr} ${color}(${rounded}%)${RESET}${staleMarker}`;
 }
-var GREEN8, YELLOW7, RED5, DIM5, WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
+var WARNING_THRESHOLD2, CRITICAL_THRESHOLD3;
 var init_enterprise_cost = __esm({
   "src/hud/elements/enterprise-cost.ts"() {
     "use strict";
     init_colors();
-    GREEN8 = "\x1B[32m";
-    YELLOW7 = "\x1B[33m";
-    RED5 = "\x1B[31m";
-    DIM5 = "\x1B[2m";
-    WARNING_THRESHOLD2 = 70;
-    CRITICAL_THRESHOLD3 = 90;
+    WARNING_THRESHOLD2 = PERCENT_WARN;
+    CRITICAL_THRESHOLD3 = PERCENT_CRITICAL;
   }
 });
 
@@ -56376,7 +56503,7 @@ function renderPromptTime(promptTime, now) {
   if (now) {
     const elapsed = now.getTime() - promptTime.getTime();
     if (elapsed >= 0) {
-      return `${dim("\u23F1")}${formatElapsed(elapsed)}`;
+      return `${dim("prompt:")}${formatElapsed(elapsed)}`;
     }
   }
   const hours = String(promptTime.getHours()).padStart(2, "0");
@@ -56397,11 +56524,11 @@ function renderAutopilot(state, _thresholds) {
     return null;
   }
   if (state.workflow?.invalid) {
-    return `${CYAN7}[AUTOPILOT]${RESET} ${RED6}workflow:invalid${RESET}`;
+    return `${activity("[AUTOPILOT]")} ${RED2}workflow:invalid${RESET}`;
   }
   if (state.workflow?.name && state.workflow.currentStage && state.workflow.currentStageIndex && state.workflow.stagesTotal) {
     const workflowName = state.workflow.name.slice(0, 32);
-    return `${CYAN7}[AUTOPILOT]${RESET} workflow:${workflowName} v${state.workflow.version}#${state.workflow.shortHash} | ${state.workflow.currentStage} ${state.workflow.currentStageIndex}/${state.workflow.stagesTotal}`;
+    return `${activity("[AUTOPILOT]")} workflow:${workflowName} v${state.workflow.version}#${state.workflow.shortHash} | ${state.workflow.currentStage} ${state.workflow.currentStageIndex}/${state.workflow.stagesTotal}`;
   }
   const { phase, iteration, maxIterations, tasksCompleted, tasksTotal, filesCreated } = state;
   const phaseNum = PHASE_INDEX[phase] || 0;
@@ -56409,26 +56536,23 @@ function renderAutopilot(state, _thresholds) {
   let phaseColor;
   switch (phase) {
     case "complete":
-      phaseColor = GREEN9;
+      phaseColor = GREEN2;
       break;
     case "failed":
-      phaseColor = RED6;
-      break;
-    case "validation":
-      phaseColor = MAGENTA3;
+      phaseColor = RED2;
       break;
     case "qa":
-      phaseColor = YELLOW8;
+      phaseColor = YELLOW2;
       break;
     default:
-      phaseColor = CYAN7;
+      phaseColor = MAGENTA3;
   }
-  let output = `${CYAN7}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
+  let output = `${activity("[AUTOPILOT]")} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
   if (iteration > 1) {
     output += ` (iter ${iteration}/${maxIterations})`;
   }
   if (phase === "execution" && tasksTotal && tasksTotal > 0) {
-    const taskColor = tasksCompleted === tasksTotal ? GREEN9 : YELLOW8;
+    const taskColor = tasksCompleted === tasksTotal ? GREEN2 : YELLOW2;
     output += ` | Tasks: ${taskColor}${tasksCompleted || 0}/${tasksTotal}${RESET}`;
   }
   if (filesCreated && filesCreated > 0) {
@@ -56436,15 +56560,14 @@ function renderAutopilot(state, _thresholds) {
   }
   return output;
 }
-var CYAN7, GREEN9, YELLOW8, RED6, MAGENTA3, PHASE_NAMES, PHASE_INDEX;
+var GREEN2, YELLOW2, RED2, MAGENTA3, PHASE_NAMES, PHASE_INDEX;
 var init_autopilot2 = __esm({
   "src/hud/elements/autopilot.ts"() {
     "use strict";
     init_colors();
-    CYAN7 = "\x1B[36m";
-    GREEN9 = "\x1B[32m";
-    YELLOW8 = "\x1B[33m";
-    RED6 = "\x1B[31m";
+    GREEN2 = "\x1B[32m";
+    YELLOW2 = "\x1B[33m";
+    RED2 = "\x1B[31m";
     MAGENTA3 = "\x1B[35m";
     PHASE_NAMES = {
       expansion: "Expand",
@@ -56677,7 +56800,7 @@ function renderGitStatus(cwd2, labels = DEFAULT_HUD_LABELS) {
   if (staged > 0) parts.push(`${green(labels.staged)}${staged}`);
   if (modified > 0) parts.push(`${red(labels.modified)}${modified}`);
   if (untracked > 0) parts.push(`${cyan(labels.untracked)}${untracked}`);
-  if (ahead > 0) parts.push(`${green(labels.ahead)}${ahead}`);
+  if (ahead > 0) parts.push(`${brightCyan(labels.ahead)}${ahead}`);
   if (behind > 0) parts.push(`${red(labels.behind)}${behind}`);
   return parts.join(" ");
 }
@@ -56831,6 +56954,26 @@ function extractVersion(modelId) {
   if (displayMatch) return displayMatch[1];
   return null;
 }
+function extractExternalVariant(id) {
+  const vMatch = id.match(/(?:^|[-_])v?(\d+(?:\.\d+)?[a-z]?)/i);
+  if (vMatch) {
+    const raw = vMatch[1];
+    const version3 = /(^|[-_])v/i.test(vMatch[0]) ? `V${raw}` : raw;
+    const after = id.slice(vMatch.index + vMatch[0].length);
+    const tail = after.match(/^[-_](pro|max|ultra|turbo)\b/i);
+    if (tail) {
+      const t = tail[1].charAt(0).toUpperCase() + tail[1].slice(1);
+      return `${version3} ${t}`;
+    }
+    return version3;
+  }
+  const variantMatch = id.match(/(?:^|[-_])(flash|lite|pro|max|turbo|mini|ultra|nano)\b/i);
+  if (variantMatch) {
+    const v = variantMatch[1];
+    return v.charAt(0).toUpperCase() + v.slice(1);
+  }
+  return null;
+}
 function formatModelName(modelId, format = "short") {
   if (!modelId) return null;
   if (format === "full") {
@@ -56841,26 +56984,55 @@ function formatModelName(modelId, format = "short") {
   if (id.includes("opus")) shortName = "Opus";
   else if (id.includes("sonnet")) shortName = "Sonnet";
   else if (id.includes("haiku")) shortName = "Haiku";
+  else {
+    for (const fam of EXTERNAL_MODEL_FAMILIES) {
+      if (fam.re.test(id)) {
+        shortName = fam.name;
+        break;
+      }
+    }
+  }
   if (!shortName) {
     return truncateToWidth(modelId, 20);
   }
   if (format === "versioned") {
-    const version3 = extractVersion(id);
-    if (version3) return `${shortName} ${version3}`;
+    if (shortName === "Opus" || shortName === "Sonnet" || shortName === "Haiku") {
+      const version3 = extractVersion(id);
+      if (version3) return `${shortName} ${version3}`;
+    } else {
+      const variant = extractExternalVariant(id);
+      if (variant) return `${shortName} ${variant}`;
+    }
   }
   return shortName;
 }
 function renderModel(modelId, format = "versioned", labels = DEFAULT_HUD_LABELS) {
   const name = formatModelName(modelId, format);
   if (!name) return null;
-  return cyan(`${labels.model}: ${name}`);
+  const tierColor = getModelTierColor(modelId ?? void 0);
+  return `${dim(`${labels.model}: `)}${tierColor}${name}${RESET}`;
 }
+var EXTERNAL_MODEL_FAMILIES;
 var init_model = __esm({
   "src/hud/elements/model.ts"() {
     "use strict";
     init_colors();
     init_string_width();
     init_types6();
+    EXTERNAL_MODEL_FAMILIES = [
+      { re: /deepseek/i, name: "DeepSeek" },
+      { re: /(^|[^a-z])gpt/i, name: "GPT" },
+      { re: /(^|[^a-z])o[1-9]-/i, name: "OpenAI" },
+      { re: /qwen/i, name: "Qwen" },
+      { re: /gemini/i, name: "Gemini" },
+      { re: /llama/i, name: "Llama" },
+      { re: /mistral/i, name: "Mistral" },
+      { re: /glm/i, name: "GLM" },
+      { re: /kimi|moonshot/i, name: "Kimi" },
+      { re: /ernie/i, name: "ERNIE" },
+      { re: /doubao/i, name: "Doubao" },
+      { re: /hunyuan/i, name: "Hunyuan" }
+    ];
   }
 });
 
@@ -56945,7 +57117,7 @@ function renderContextLimitWarning(contextPercent, threshold, autoCompact) {
     return null;
   }
   const isCritical = safePercent >= 90;
-  const color = isCritical ? RED7 : YELLOW9;
+  const color = isCritical ? RED3 : YELLOW3;
   const icon = isCritical ? "!!" : "!";
   const action = autoCompact ? "(auto-compact queued)" : "run /compact";
   return `${color}${BOLD2}[${icon}] ctx ${safePercent}% >= ${threshold}% threshold - ${action}${RESET}`;
@@ -56955,18 +57127,18 @@ function renderPayloadLimitWarning(payloadEstimate) {
     return null;
   }
   const isCritical = payloadEstimate.pressure === "critical";
-  const color = isCritical ? RED7 : YELLOW9;
+  const color = isCritical ? RED3 : YELLOW3;
   const icon = isCritical ? "!!" : "!";
   const action = isCritical ? "compact may fail; consider new session" : "consider /compact soon";
   return `${color}${BOLD2}[${icon}] ${payloadEstimate.label} - ${action}${RESET}`;
 }
-var YELLOW9, RED7, BOLD2;
+var YELLOW3, RED3, BOLD2;
 var init_context_warning = __esm({
   "src/hud/elements/context-warning.ts"() {
     "use strict";
     init_colors();
-    YELLOW9 = "\x1B[33m";
-    RED7 = "\x1B[31m";
+    YELLOW3 = "\x1B[33m";
+    RED3 = "\x1B[31m";
     BOLD2 = "\x1B[1m";
   }
 });
@@ -57100,6 +57272,8 @@ function limitOutputLines(lines, maxLines) {
 async function render(context, config2) {
   const { elements: enabledElements } = config2;
   const hudLabels = config2.labels ?? DEFAULT_HUD_LABELS;
+  const enableGrouping = config2.elements.ioGrouping ?? false;
+  let tokenParts = null;
   const rendered = /* @__PURE__ */ new Map();
   const renderedDetail = /* @__PURE__ */ new Map();
   if (enabledElements.hostname) {
@@ -57145,7 +57319,7 @@ async function render(context, config2) {
     if (keySource) rendered.set("apiKeySource", keySource);
   }
   if (enabledElements.profile && context.profileName) {
-    rendered.set("profile", bold(`profile:${context.profileName}`));
+    rendered.set("profile", dim(`profile:${context.profileName}`));
   }
   if (enabledElements.omcLabel) {
     const localSuffix = isRuntimePackageLocal() ? "L" : "";
@@ -57156,7 +57330,7 @@ async function render(context, config2) {
         bold(`[OMC${versionTag}] -> ${context.updateAvailable} omc update`)
       );
     } else {
-      rendered.set("omcLabel", bold(`[OMC${versionTag}]`));
+      rendered.set("omcLabel", `[OMC${versionTag}]`);
     }
   }
   const isEnterprise = enabledElements.enterpriseMode !== void 0 ? enabledElements.enterpriseMode : (context.subscriptionType ?? "").toLowerCase() === "enterprise" || /claude_zero/i.test(context.rateLimitTier ?? "");
@@ -57207,8 +57381,9 @@ async function render(context, config2) {
   }
   if (enabledElements.sessionHealth && context.sessionHealth) {
     const showDuration = enabledElements.showSessionDuration ?? true;
-    if (showDuration) {
-      const session = renderSession(context.sessionHealth);
+    const showIndicator = enabledElements.showHealthIndicator ?? true;
+    if (showDuration || showIndicator) {
+      const session = renderSession(context.sessionHealth, showIndicator);
       if (session) rendered.set("session", session);
     }
   }
@@ -57221,20 +57396,24 @@ async function render(context, config2) {
     if (cost) {
       rendered.set("enterpriseCost", cost);
     } else if (enabledElements.showTokens === true) {
-      const tokenUsage = renderTokenUsage(
+      tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
         hudLabels
       );
-      if (tokenUsage) rendered.set("tokens", tokenUsage);
+      if (tokenParts && !enableGrouping) {
+        rendered.set("tokens", joinTokenParts(tokenParts));
+      }
     }
   } else if (enabledElements.showTokens === true) {
-    const tokenUsage = renderTokenUsage(
+    tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
       hudLabels
     );
-    if (tokenUsage) rendered.set("tokens", tokenUsage);
+    if (tokenParts && !enableGrouping) {
+      rendered.set("tokens", joinTokenParts(tokenParts));
+    }
   }
   if (enabledElements.ralph && context.ralph) {
     const ralph = renderRalph(context.ralph, config2.thresholds, hudLabels);
@@ -57349,6 +57528,45 @@ async function render(context, config2) {
     }
     return result;
   }
+  function collectInlineWithRegions(order) {
+    const regions = { I: [], O: [], S: [] };
+    const prefix = [];
+    const regionLabels = {
+      I: hudLabels.input,
+      O: hudLabels.output,
+      S: hudLabels.status
+    };
+    for (const name of order) {
+      if (name === "omcLabel") {
+        const el2 = rendered.get(name);
+        if (el2) prefix.push(el2);
+        continue;
+      }
+      if (name === "tokens") {
+        if (!tokenParts) continue;
+        regions.I.push(tokenParts.input);
+        const output = [tokenParts.output, tokenParts.reasoning].filter((p) => p !== null).join(" ");
+        if (output) regions.O.push(output);
+        if (tokenParts.session) regions.S.push(tokenParts.session);
+        continue;
+      }
+      let el = rendered.get(name);
+      if (!el) {
+        const lines = renderedDetail.get(name);
+        if (lines && lines.length > 0) el = lines.join(" ");
+      }
+      if (el) {
+        regions[DEFAULT_REGION_MAP[name] ?? "S"].push(el);
+      }
+    }
+    const segments = [...prefix];
+    for (const group of REGION_ORDER) {
+      const els = regions[group];
+      if (els.length === 0) continue;
+      segments.push(`${dim(`${regionLabels[group]}: `)}${els.join(DIM_SEPARATOR)}`);
+    }
+    return segments.length > 0 ? [segments.join(DIM_SEPARATOR)] : [];
+  }
   function collectDetailLines(order) {
     const result = [];
     for (const name of order) {
@@ -57362,7 +57580,7 @@ async function render(context, config2) {
     return result;
   }
   const gitElements = collectInline(effectiveLayout.line1);
-  const elements = collectInline(effectiveLayout.main);
+  const elements = enableGrouping ? collectInlineWithRegions(effectiveLayout.main) : collectInline(effectiveLayout.main);
   const detailLines = collectDetailLines(effectiveLayout.detail);
   const outputLines = [];
   const gitInfoLine = gitElements.length > 0 ? gitElements.join(dim(PLAIN_SEPARATOR)) : null;
@@ -57397,7 +57615,7 @@ async function render(context, config2) {
   ) : limitedLines;
   return finalLines.join("\n");
 }
-var ANSI_REGEX, PLAIN_SEPARATOR, DIM_SEPARATOR;
+var ANSI_REGEX, PLAIN_SEPARATOR, DIM_SEPARATOR, REGION_ORDER;
 var init_render = __esm({
   "src/hud/render.ts"() {
     "use strict";
@@ -57434,6 +57652,7 @@ var init_render = __esm({
     ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
     PLAIN_SEPARATOR = " | ";
     DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+    REGION_ORDER = ["I", "O", "S"];
   }
 });
 
@@ -57442,7 +57661,7 @@ function stripAnsi2(text) {
   return text.replace(CSI_NON_SGR_REGEX, "").replace(OSC_REGEX, "").replace(SIMPLE_ESC_REGEX, "");
 }
 function replaceUnicodeBlocks(text) {
-  return text.replace(/█/g, "#").replace(/░/g, "-").replace(/▓/g, "=").replace(/▒/g, "-");
+  return text;
 }
 function sanitizeOutput(output) {
   let sanitized = stripAnsi2(output);
@@ -57696,12 +57915,12 @@ function spawnSessionSummaryScript(transcriptPath, stateDir, sessionId) {
     }
   }
 }
-async function calculateSessionHealth(sessionStart, contextPercent) {
+async function calculateSessionHealth(sessionStart, contextPercent, thresholds) {
   const durationMs = sessionStart ? Date.now() - sessionStart.getTime() : 0;
   const durationMinutes = Math.floor(durationMs / 6e4);
   let health = "healthy";
-  if (durationMinutes > 120 || contextPercent > 85) health = "critical";
-  else if (durationMinutes > 60 || contextPercent > 70) health = "warning";
+  if (durationMinutes > 120 || contextPercent >= thresholds.contextCritical) health = "critical";
+  else if (durationMinutes > 60 || contextPercent >= thresholds.contextWarning) health = "warning";
   return { durationMinutes, messageCount: 0, health };
 }
 function showDiagnostic() {
@@ -57767,7 +57986,7 @@ async function main2(watchMode = false, skipInit = false) {
     });
     const currentSessionId = extractSessionIdFromPath(
       resolvedTranscriptPath ?? stdin.transcript_path ?? ""
-    );
+    ) || process.env.CLAUDE_SESSION_ID?.trim() || process.env.CLAUDECODE_SESSION_ID?.trim() || null;
     if (!skipInit) {
       await initializeHUDState(cwd2, currentSessionId ?? void 0);
     }
@@ -57791,14 +58010,29 @@ async function main2(watchMode = false, skipInit = false) {
         sessionStart = persisted;
       }
     } else if (sessionStart) {
-      const stateToWrite = hudState || {
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        backgroundTasks: []
+      const sessionStartDate = sessionStart;
+      const persistSessionStart = () => {
+        const currentState = readHudState(cwd2, currentSessionId ?? void 0);
+        const stateToWrite = currentState ?? {
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          backgroundTasks: []
+        };
+        stateToWrite.sessionStartTimestamp = sessionStartDate.toISOString();
+        stateToWrite.sessionId = currentSessionId ?? void 0;
+        stateToWrite.timestamp = (/* @__PURE__ */ new Date()).toISOString();
+        writeHudState(stateToWrite, cwd2, currentSessionId ?? void 0, {
+          lock: false
+        });
       };
-      stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
-      stateToWrite.sessionId = currentSessionId ?? void 0;
-      stateToWrite.timestamp = (/* @__PURE__ */ new Date()).toISOString();
-      writeHudState(stateToWrite, cwd2, currentSessionId ?? void 0);
+      try {
+        withFileLockSync(
+          getHudStateLockPath(cwd2, currentSessionId ?? void 0),
+          persistSessionStart,
+          { timeoutMs: 200, retryDelayMs: 20 }
+        );
+      } catch {
+        persistSessionStart();
+      }
     }
     const stdinRateLimits = getRateLimitsFromStdin(stdin);
     const usageResult = config2.elements.rateLimits === false ? null : await getUsage();
@@ -57877,7 +58111,11 @@ async function main2(watchMode = false, skipInit = false) {
       customBuckets,
       pendingPermission: transcriptData.pendingPermission || null,
       thinkingState: transcriptData.thinkingState || null,
-      sessionHealth: await calculateSessionHealth(sessionStart, contextPercent),
+      sessionHealth: await calculateSessionHealth(
+        sessionStart,
+        contextPercent,
+        config2.thresholds
+      ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
       omcVersion,
@@ -57928,7 +58166,7 @@ async function main2(watchMode = false, skipInit = false) {
       }
     }
     let output = await render(context, config2);
-    const useSafeMode = config2.elements.safeMode !== false && (config2.elements.safeMode || process.platform === "win32");
+    const useSafeMode = config2.elements.safeMode === true;
     if (useSafeMode) {
       output = sanitizeOutput(output);
       console.log(output);
@@ -57956,6 +58194,7 @@ var init_hud = __esm({
     init_stdin();
     init_transcript();
     init_state3();
+    init_file_lock();
     init_omc_state();
     init_usage_api();
     init_custom_rate_provider();
@@ -93514,7 +93753,7 @@ var KEYWORD_PATTERNS = {
   tdd: /\b(tdd)\b|\btest\s+first\b|(테스트\s?퍼스트)|(テスト\s?ファースト)/i,
   "code-review": /\b(code\s+review|review\s+code)\b|(코드\s?리뷰)(?!어)|(コード\s?レビュー)(?!ア)/i,
   "security-review": /\b(security\s+review|review\s+security)\b|(보안\s?리뷰)(?!어)|(セキュリティ[ー]?\s?レビュー)(?!ア)/i,
-  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)/i,
+  ultrathink: /\b(ultrathink)\b|(울트라씽크)|(ウルトラシンク)|深度优化|(?<!代码|性能|数据|查询|配置|架构|算法|系统|网络|成本|结构|流程|资源|内存|缓存|索引|编译|存储)优化/i,
   deepsearch: /\b(deepsearch)\b|\bsearch\s+the\s+codebase\b|\bfind\s+in\s+(the\s+)?codebase\b|(딥\s?서치)|(ディープ\s?サーチ)/i,
   analyze: /\b(deep[\s-]?analyze|deepanalyze)\b|(딥\s?분석)|(ディープ\s?アナライズ)/i,
   "deep-interview": /\b(deep[\s-]interview|ouroboros)\b|(딥인터뷰)|(ディープインタビュー)/i,

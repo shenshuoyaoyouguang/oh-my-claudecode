@@ -7,7 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { dim, cyan, green, red } from '../colors.js';
+import { dim, cyan, green, red, brightCyan } from '../colors.js';
 import type { HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 
@@ -266,7 +266,7 @@ export function renderGitStatus(
   if (staged > 0) parts.push(`${green(labels.staged)}${staged}`);
   if (modified > 0) parts.push(`${red(labels.modified)}${modified}`);
   if (untracked > 0) parts.push(`${cyan(labels.untracked)}${untracked}`);
-  if (ahead > 0) parts.push(`${green(labels.ahead)}${ahead}`);
+  if (ahead > 0) parts.push(`${brightCyan(labels.ahead)}${ahead}`);
   if (behind > 0) parts.push(`${red(labels.behind)}${behind}`);
 
   return parts.join(' ');

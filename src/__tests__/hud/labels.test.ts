@@ -126,7 +126,8 @@ describe('HUD labels', () => {
     expect(stripAnsi(renderContext(67, DEFAULT_HUD_CONFIG.thresholds, 'labels-default') ?? '')).toBe('ctx:67%');
     const tokenOut = renderTokenUsage({ inputTokens: 1530, outputTokens: 987 });
     expect(stripAnsi(tokenOut ?? '')).toBe('↑1.5k ↓987');
-    expect(renderCallCounts(5, 3, 2, 'ascii')).toBe('T:5 A:3 S:2');
+    // P0-3：ASCII 标签 Tl/Ag/Sk（原 T/A/S 与 agent 编码冲突）
+    expect(renderCallCounts(5, 3, 2, 'ascii')).toBe('Tl:5 Ag:3 Sk:2');
     expect(DEFAULT_HUD_LABELS.input).toBe('I');
     expect(DEFAULT_HUD_LABELS.output).toBe('O');
     expect(DEFAULT_HUD_LABELS.status).toBe('S');

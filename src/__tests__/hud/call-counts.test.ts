@@ -76,7 +76,8 @@ describe('renderCallCounts', () => {
   describe('output format', () => {
     it('supports explicit ASCII rendering overrides', () => {
       const result = renderCallCounts(5, 2, 1, 'ascii');
-      expect(result).toBe('T:5 A:2 S:1');
+      // P0-3：ASCII 标签 Tl/Ag/Sk（原 T/A/S 与 agent 编码冲突）
+      expect(result).toBe('Tl:5 Ag:2 Sk:1');
     });
 
     it('supports explicit emoji rendering overrides', () => {

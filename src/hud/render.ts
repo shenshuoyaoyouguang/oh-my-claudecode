@@ -397,7 +397,8 @@ export async function render(
   }
 
   if (enabledElements.profile && context.profileName) {
-    rendered.set("profile", bold(`profile:${context.profileName}`));
+    // P0-2：profile 非 bold（bold 只保留给 update 提醒与 warning banner — R-WEIGHT-3）
+    rendered.set("profile", dim(`profile:${context.profileName}`));
   }
 
   // -- main-group elements (default: main statusline) --
@@ -413,7 +414,8 @@ export async function render(
         bold(`[OMC${versionTag}] -> ${context.updateAvailable} omc update`),
       );
     } else {
-      rendered.set("omcLabel", bold(`[OMC${versionTag}]`));
+      // R-WEIGHT-3 品牌降权：品牌标签默认前景、非 bold（bold 白名单只留给 update/警告/临界）
+      rendered.set("omcLabel", `[OMC${versionTag}]`);
     }
   }
 
@@ -488,8 +490,9 @@ export async function render(
 
   if (enabledElements.sessionHealth && context.sessionHealth) {
     const showDuration = enabledElements.showSessionDuration ?? true;
-    if (showDuration) {
-      const session = renderSession(context.sessionHealth);
+    const showIndicator = enabledElements.showHealthIndicator ?? true;
+    if (showDuration || showIndicator) {
+      const session = renderSession(context.sessionHealth, showIndicator);
       if (session) rendered.set("session", session);
     }
   }
@@ -507,7 +510,7 @@ export async function render(
       tokenParts = splitTokenUsage(
         context.lastRequestTokenUsage,
         context.sessionTotalTokens,
-        hudLabels,
+
       );
       if (tokenParts && !enableGrouping) {
         rendered.set("tokens", joinTokenParts(tokenParts));
@@ -517,7 +520,7 @@ export async function render(
     tokenParts = splitTokenUsage(
       context.lastRequestTokenUsage,
       context.sessionTotalTokens,
-      hudLabels,
+
     );
     if (tokenParts && !enableGrouping) {
       rendered.set("tokens", joinTokenParts(tokenParts));

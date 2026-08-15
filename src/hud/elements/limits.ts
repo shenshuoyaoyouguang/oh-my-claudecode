@@ -6,27 +6,22 @@
  */
 
 import type { RateLimits, CustomProviderResult, CustomBucketUsage, UsageResult } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, DIM, STATUS, PERCENT_WARN, PERCENT_CRITICAL } from '../colors.js';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const DIM = '\x1b[2m';
-
-// Thresholds for rate limit warnings
-const WARNING_THRESHOLD = 70;
-const CRITICAL_THRESHOLD = 90;
+// 阈值单一来源：与 context/cost/payload 共用 colors.ts 的统一百分比阈值（P0-1 / P1-07）
+const WARNING_THRESHOLD = PERCENT_WARN;
+const CRITICAL_THRESHOLD = PERCENT_CRITICAL;
 
 /**
  * Get color based on percentage
  */
 function getColor(percent: number): string {
   if (percent >= CRITICAL_THRESHOLD) {
-    return RED;
+    return STATUS.critical;
   } else if (percent >= WARNING_THRESHOLD) {
-    return YELLOW;
+    return STATUS.warn;
   }
-  return GREEN;
+  return STATUS.ok;
 }
 
 /**
@@ -72,8 +67,8 @@ export function renderRateLimits(limits: RateLimits | null, stale?: boolean): st
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
 
   const fiveHourPart = fiveHourReset
-    ? `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
-    : `5h:${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+    ? `${DIM}5h:${RESET}${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
+    : `${DIM}5h:${RESET}${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
 
   const parts = [fiveHourPart];
 
@@ -211,8 +206,8 @@ export function renderRateLimitsWithBar(
   const fiveHourReset = formatResetTime(limits.fiveHourResetsAt);
 
   const fiveHourPart = fiveHourReset
-    ? `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
-    : `5h:[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
+    ? `${DIM}5h:${RESET}[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}${DIM}(${resetPrefix}${fiveHourReset})${RESET}`
+    : `${DIM}5h:${RESET}[${fiveHourBar}]${fiveHourColor}${fiveHour}%${RESET}${staleMarker}`;
 
   const parts = [fiveHourPart];
 
@@ -310,8 +305,8 @@ export function renderRateLimitsError(result: UsageResult | null): string | null
     // when there is no cached rate limit data to display.
     return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
   }
-  if (result.error === 'auth') return `${YELLOW}[API auth]${RESET}`;
-  return `${YELLOW}[API err]${RESET}`;
+  if (result.error === 'auth') return `${STATUS.warn}[API auth]${RESET}`;
+  return `${STATUS.warn}[API err]${RESET}`;
 }
 
 /**
@@ -380,7 +375,7 @@ export function renderCustomBuckets(
 ): string | null {
   // Command failed and no cached data
   if (result.error && result.buckets.length === 0) {
-    return `${YELLOW}[cmd:err]${RESET}`;
+    return `${STATUS.warn}[cmd:err]${RESET}`;
   }
 
   if (result.buckets.length === 0) return null;

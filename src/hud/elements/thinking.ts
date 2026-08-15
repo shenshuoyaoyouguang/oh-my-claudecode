@@ -6,9 +6,7 @@
 
 import type { ThinkingState, ThinkingFormat, HudLabels } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
-
-const CYAN = '\x1b[36m';
+import { activity } from '../colors.js';
 
 /**
  * Render thinking indicator based on format.
@@ -32,7 +30,8 @@ export function renderThinking(
     case 'face':
       return '🤔';
     case 'text':
-      return `${CYAN}${labels.thinking}${RESET}`;
+      // v2：思考中属于"活动光谱"（进行中的智能活动），用品红而非青色
+      return activity(labels.thinking);
     default:
       return '💭';
   }

@@ -16,7 +16,7 @@ const STALE_TASK_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes default
  * 返回 readHudState / writeHudState 两个函数引用。
  */
 async function loadStateModule(): Promise<typeof import('./state.js')> {
-  return await import('./state.js');
+  return import('./state.js');
 }
 
 /**

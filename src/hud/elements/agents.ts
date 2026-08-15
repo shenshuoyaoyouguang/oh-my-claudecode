@@ -159,7 +159,9 @@ function getAgentCode(agentType: string, model?: string): string {
 
 /**
  * Format duration for display.
- * <10s: no suffix, 10s-59s: (Xs), 1m-9m: (Xm), >=10m: !
+ * <10s: no suffix, 10s-59s: (Xs), 1m-9m: (Xm), >=10m: ⏱ (超时信号)
+ * P0-3/P2-04：超时符号由 '!' 改为 '⏱'——'!' 在全 HUD 只表达"异常/需注意"
+ * （git modified、context warning），agent 超时改用计时符号避免同形异义。
  */
 function formatDuration(durationMs: number): string {
   const seconds = Math.floor(durationMs / 1000);
@@ -172,7 +174,7 @@ function formatDuration(durationMs: number): string {
   } else if (minutes < 10) {
     return `(${minutes}m)`;
   } else {
-    return '!'; // Alert for very long durations
+    return '⏱'; // Alert for very long durations
   }
 }
 
@@ -251,10 +253,10 @@ export function renderAgentsCodedWithDuration(agents: ActiveAgent[]): string | n
     // Color the code by model tier
     const modelColor = getModelTierColor(a.model);
 
-    if (duration === '!') {
-      // Alert case - show exclamation in duration color
+    if (duration === '⏱') {
+      // Alert case - show timeout marker in duration color
       const durationColor = getDurationColor(durationMs);
-      return `${modelColor}${code}${durationColor}!${RESET}`;
+      return `${modelColor}${code}${durationColor}⏱${RESET}`;
     } else if (duration) {
       // Normal duration - dim the time portion
       return `${modelColor}${code}${dim(duration)}${RESET}`;
@@ -428,11 +430,11 @@ export function renderAgentsWithDescriptions(agents: ActiveAgent[]): string | nu
 
     // Format: O:description or ◆:tm:worker-1 description(2m)
     let entry = `${color}${code}${RESET}:${dim(label)}`;
-    if (duration && duration !== '!') {
+    if (duration && duration !== '⏱') {
       entry += dim(duration);
-    } else if (duration === '!') {
+    } else if (duration === '⏱') {
       const durationColor = getDurationColor(durationMs);
-      entry += `${durationColor}!${RESET}`;
+      entry += `${durationColor}⏱${RESET}`;
     }
 
     return entry;
@@ -464,9 +466,9 @@ export function renderAgentsDescOnly(agents: ActiveAgent[]): string | null {
     const durationMs = now - a.startTime.getTime();
     const duration = formatDuration(durationMs);
 
-    if (duration === '!') {
+    if (duration === '⏱') {
       const durationColor = getDurationColor(durationMs);
-      return `${color}${desc}${durationColor}!${RESET}`;
+      return `${color}${desc}${durationColor}⏱${RESET}`;
     } else if (duration) {
       return `${color}${desc}${dim(duration)}${RESET}`;
     }

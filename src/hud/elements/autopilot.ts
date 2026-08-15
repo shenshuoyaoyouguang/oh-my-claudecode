@@ -5,9 +5,9 @@
  */
 
 import type { HudThresholds } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, activity, dim } from '../colors.js';
 
-// ANSI color codes
+// ANSI color codes（v2：活动光谱）
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
@@ -69,18 +69,18 @@ export function renderAutopilot(
   }
 
   if (state.workflow?.invalid) {
-    return `${CYAN}[AUTOPILOT]${RESET} ${RED}workflow:invalid${RESET}`;
+    return `${activity('[AUTOPILOT]')} ${RED}workflow:invalid${RESET}`;
   }
   if (state.workflow?.name && state.workflow.currentStage && state.workflow.currentStageIndex && state.workflow.stagesTotal) {
     const workflowName = state.workflow.name.slice(0, 32);
-    return `${CYAN}[AUTOPILOT]${RESET} workflow:${workflowName} v${state.workflow.version}#${state.workflow.shortHash} | ${state.workflow.currentStage} ${state.workflow.currentStageIndex}/${state.workflow.stagesTotal}`;
+    return `${activity('[AUTOPILOT]')} workflow:${workflowName} v${state.workflow.version}#${state.workflow.shortHash} | ${state.workflow.currentStage} ${state.workflow.currentStageIndex}/${state.workflow.stagesTotal}`;
   }
 
   const { phase, iteration, maxIterations, tasksCompleted, tasksTotal, filesCreated } = state;
   const phaseNum = PHASE_INDEX[phase] || 0;
   const phaseName = PHASE_NAMES[phase] || phase;
 
-  // Color based on phase
+  // v2 活动光谱：进行中=品红（activity），qa=黄（注意），完成=绿，失败=红
   let phaseColor: string;
   switch (phase) {
     case 'complete':
@@ -89,17 +89,15 @@ export function renderAutopilot(
     case 'failed':
       phaseColor = RED;
       break;
-    case 'validation':
-      phaseColor = MAGENTA;
-      break;
     case 'qa':
       phaseColor = YELLOW;
       break;
     default:
-      phaseColor = CYAN;
+      // expansion/planning/execution/validation 均属"进行中" → 活动品红
+      phaseColor = MAGENTA;
   }
 
-  let output = `${CYAN}[AUTOPILOT]${RESET} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
+  let output = `${activity('[AUTOPILOT]')} Phase ${phaseColor}${phaseNum}/5${RESET}: ${phaseName}`;
 
   // Add iteration count if not first iteration
   if (iteration > 1) {

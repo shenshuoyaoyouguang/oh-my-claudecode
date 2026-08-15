@@ -498,9 +498,9 @@ export interface HudLabels {
 export const DEFAULT_HUD_LABELS: HudLabels = {
   context: 'ctx',
   tokens: 'tok',
-  tool: 'T',
-  agent: 'A',
-  skill: 'S',
+  tool: 'Tl',      // P0-3：原 'T'，与 agent 编码 analyst/test-engineer 冲突；Tl=tool
+  agent: 'Ag',     // P0-3：原 'A'，与 agent 编码 architect 冲突；Ag=agent
+  skill: 'Sk',     // P0-3：原 'S'，与 agent 编码 scientist 冲突；Sk=skill
   ralph: 'ralph',
   background: 'bg',
   thinking: 'thinking',
@@ -625,11 +625,11 @@ export interface HudElementConfig {
 }
 
 export interface HudThresholds {
-  /** Context percentage that triggers warning color (default: 70) */
+  /** Context percentage that triggers warning color (default: 70, 与 rate limits 统一) */
   contextWarning: number;
   /** Context percentage that triggers compact suggestion (default: 80) */
   contextCompactSuggestion: number;
-  /** Context percentage that triggers critical color (default: 85) */
+  /** Context percentage that triggers critical color (default: 90, 与 rate limits 统一 — P0-1) */
   contextCritical: number;
   /** Ralph iteration that triggers warning color (default: 7) */
   ralphWarning: number;
@@ -739,6 +739,9 @@ export interface HudConfig {
 
 export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 
+/** Maximum concurrent background tasks for HUD display. */
+export const MAX_BACKGROUND_CONCURRENT = 5;
+
 export const DEFAULT_HUD_CONFIG: HudConfig = {
   preset: 'focused',
   locale: 'en',
@@ -791,7 +794,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
   thresholds: {
     contextWarning: 70,
     contextCompactSuggestion: 80,
-    contextCritical: 85,
+    contextCritical: 90, // 与 rate limits 统一（P0-1）；原 85
     ralphWarning: 7,
   },
   staleTaskThresholdMinutes: 10,

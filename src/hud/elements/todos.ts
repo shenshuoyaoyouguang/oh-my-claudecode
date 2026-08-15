@@ -5,13 +5,17 @@
  */
 
 import type { TodoItem } from "../types.js";
-import { RESET } from "../colors.js";
+import { RESET, DIM, getTodoColor } from "../colors.js";
 import { truncateToWidth } from "../../utils/string-width.js";
 
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const CYAN = "\x1b[36m";
-const DIM = "\x1b[2m";
+/**
+ * 进度色（R-THRESH-2，P0-1）：≥80% GREEN / ≥1% CYAN / 0 DIM。
+ * 进度只表达"完成度"，不使用状态黄（去 YELLOW，避免"进度黄=危险黄"）。
+ * v2：统一收敛到 colors.ts 的 getTodoColor（单一来源）。
+ */
+function getProgressColor(completed: number, total: number): string {
+  return getTodoColor(completed, total);
+}
 
 /**
  * Render todo progress.
@@ -27,17 +31,7 @@ export function renderTodos(todos: TodoItem[]): string | null {
   const completed = todos.filter((t) => t.status === "completed").length;
   const total = todos.length;
 
-  // Color based on progress
-  let color: string;
-  const percent = (completed / total) * 100;
-
-  if (percent >= 80) {
-    color = GREEN;
-  } else if (percent >= 50) {
-    color = YELLOW;
-  } else {
-    color = CYAN;
-  }
+  const color = getProgressColor(completed, total);
 
   return `todos:${color}${completed}/${total}${RESET}`;
 }
@@ -56,17 +50,7 @@ export function renderTodosWithCurrent(todos: TodoItem[]): string | null {
   const total = todos.length;
   const inProgress = todos.find((t) => t.status === "in_progress");
 
-  // Color based on progress
-  const percent = (completed / total) * 100;
-  let color: string;
-
-  if (percent >= 80) {
-    color = GREEN;
-  } else if (percent >= 50) {
-    color = YELLOW;
-  } else {
-    color = CYAN;
-  }
+  const color = getProgressColor(completed, total);
 
   let result = `todos:${color}${completed}/${total}${RESET}`;
 

@@ -24,8 +24,9 @@ function formatElapsed(ms: number): string {
 
 /**
  * Render elapsed time since prompt submission.
+ * 标签语法统一（P0-2 / P2-06）：⏱13s → prompt:13s，消除与 session:45m 的"双时间无标签"歧义。
  *
- * Format: ⏱13s  or  ⏱1m23s  or  ⏱2h3m
+ * Format: prompt:13s  or  prompt:1m23s  or  prompt:2h3m
  * Falls back to HH:MM:SS timestamp if now is not provided.
  */
 export function renderPromptTime(promptTime: Date | null, now?: Date): string | null {
@@ -34,7 +35,7 @@ export function renderPromptTime(promptTime: Date | null, now?: Date): string | 
   if (now) {
     const elapsed = now.getTime() - promptTime.getTime();
     if (elapsed >= 0) {
-      return `${dim('⏱')}${formatElapsed(elapsed)}`;
+      return `${dim('prompt:')}${formatElapsed(elapsed)}`;
     }
   }
 

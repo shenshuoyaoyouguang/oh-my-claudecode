@@ -541,7 +541,8 @@ describe('token usage rendering', () => {
     const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
 
     // ↑ = input, ↓ = output, r = reasoning, s = session total
-    expect(plain).toContain('↑1.3k ↓340 r120 s6.6k');
+    // P0-3：r/tot 带冒号自解释前缀
+    expect(plain).toContain('↑1.3k ↓340 r:120 tot:6.6k');
   });
 
   it('omits last-request token usage when explicitly disabled', async () => {
@@ -568,8 +569,8 @@ describe('token usage rendering', () => {
     const oIdx = plain.indexOf('O:');
     const sIdx = plain.indexOf('S:');
     const inputIdx = plain.indexOf('↑1.3k');
-    const outputIdx = plain.indexOf('↓340 r120');
-    const sessionIdx = plain.indexOf('s6.6k');
+    const outputIdx = plain.indexOf('↓340 r:120');
+    const sessionIdx = plain.indexOf('tot:6.6k');
     expect(inputIdx).toBeGreaterThan(iIdx);
     expect(inputIdx).toBeLessThan(oIdx);
     expect(outputIdx).toBeGreaterThan(oIdx);
@@ -594,7 +595,7 @@ describe('token usage rendering', () => {
     expect(plain.indexOf('ctx:30%')).toBeGreaterThan(plain.indexOf('I:'));
     expect(plain.indexOf('ctx:30%')).toBeLessThan(plain.indexOf('O:'));
     expect(plain).toContain('O:');
-    expect(plain).toContain('↓340 r120');
+    expect(plain).toContain('↓340 r:120');
     expect(plain.indexOf('Model: Sonnet 4.5')).toBeGreaterThan(plain.indexOf('S:'));
   });
 });
@@ -789,7 +790,7 @@ describe('layout element ordering', () => {
     expect(mainLine).toBeDefined();
     expect(mainLine!).toContain('ctx:');
     expect(mainLine!).toContain('session:');
-    expect(mainLine!).toMatch(/(?:🔧5|T:5)/);
+    expect(mainLine!).toMatch(/(?:🔧5|Tl:5)/);
     expect(mainLine!.indexOf('ctx:')).toBeLessThan(mainLine!.indexOf('[OMC'));
     expect(mainLine!.indexOf('[OMC')).toBeLessThan(mainLine!.indexOf('session:'));
   });
@@ -949,10 +950,12 @@ describe('HUD model display', () => {
 
   it('renders the Claude model when statusline stdin provides reliable metadata', async () => {
     const output = await render(createModelContext('Claude Sonnet 4.5'), modelConfig);
+    // P0-2：标签 dim + 值档位色，断言需剥离 ANSI（标签与值之间有色码）
+    const plain = output.replace(/\x1b\[[0-9;]*m/g, '');
 
     expect(output.split('\n')).toHaveLength(1);
-    expect(output).toContain('[OMC#4.14.0]');
-    expect(output).toContain('Model: Sonnet 4.5');
+    expect(plain).toContain('[OMC#4.14.0]');
+    expect(plain).toContain('Model: Sonnet 4.5');
   });
 
   it('renders full format from raw model id when display name is also available', async () => {
@@ -967,8 +970,9 @@ describe('HUD model display', () => {
       },
     });
 
-    expect(output).toContain('Model: claude-sonnet-4-5-20250929');
-    expect(output).not.toContain('Claude Sonnet 4.5');
+    const plain = output.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('Model: claude-sonnet-4-5-20250929');
+    expect(plain).not.toContain('Claude Sonnet 4.5');
   });
 
   it('renders configured model label through HUD labels', async () => {
@@ -980,14 +984,15 @@ describe('HUD model display', () => {
       },
     });
 
-    expect(output).toContain('模型: Sonnet 4.5');
-    expect(output).not.toContain('Model: Sonnet 4.5');
+    const plain = output.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('模型: Sonnet 4.5');
+    expect(plain).not.toContain('Model: Sonnet 4.5');
   });
 
   it('omits the model segment when model metadata is unavailable', async () => {
     const output = await render(createModelContext(null), modelConfig);
 
-    expect(output).toBe('\u001b[1m[OMC#4.14.0]\u001b[0m');
+    expect(output).toBe("[OMC#4.14.0]");
     expect(output).not.toContain('Unknown');
   });
 });

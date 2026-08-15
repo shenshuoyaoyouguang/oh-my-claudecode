@@ -6,12 +6,8 @@
 
 import type { HudLabels, HudThresholds } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, STATUS, DIM } from '../colors.js';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const DIM = '\x1b[2m';
 const CONTEXT_DISPLAY_HYSTERESIS = 2;
 const CONTEXT_DISPLAY_STATE_TTL_MS = 5_000;
 
@@ -50,13 +46,16 @@ function getContextDisplayStyle(
 
   switch (severity) {
     case 'critical':
-      return { color: RED, suffix: ' CRITICAL' };
+      return { color: STATUS.critical, suffix: ' CRITICAL' };
     case 'compact':
-      return { color: YELLOW, suffix: ' COMPRESS?' };
+      return { color: STATUS.warn, suffix: ' COMPRESS?' };
     case 'warning':
-      return { color: YELLOW, suffix: '' };
+      return { color: STATUS.warn, suffix: '' };
     default:
-      return { color: GREEN, suffix: '' };
+      // v2 光谱：<warning 阈值内再分 notice（≥30%）与 ok（<30%）
+      return safePercent >= 30
+        ? { color: STATUS.notice, suffix: '' }
+        : { color: STATUS.ok, suffix: '' };
   }
 }
 

@@ -28,6 +28,7 @@ import type {
   HudLabels,
   HudLocale,
 } from "./types.js";
+import { MAX_BACKGROUND_CONCURRENT } from "./types.js";
 import {
   DEFAULT_HUD_CONFIG,
   PRESET_CONFIGS,
@@ -363,11 +364,10 @@ export function getBackgroundTaskCount(state: OmcHudState | null): {
   running: number;
   max: number;
 } {
-  const MAX_CONCURRENT = 5;
   const running = state
     ? state.backgroundTasks.filter((t) => t.status === "running").length
     : 0;
-  return { running, max: MAX_CONCURRENT };
+  return { running, max: MAX_BACKGROUND_CONCURRENT };
 }
 
 // ============================================================================

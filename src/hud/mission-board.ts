@@ -235,6 +235,9 @@ function writeState(directory: string, state: MissionBoardState, sessionId?: str
     });
   } catch {
     // 锁争用降级:无锁写入,避免阻塞 HUD 渲染
+    if (process.env.OMC_DEBUG) {
+      console.error('[mission-board] State lock contention, falling back to unlocked write');
+    }
     writeStateLocked();
   }
   return state;

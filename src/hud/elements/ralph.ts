@@ -6,12 +6,7 @@
 
 import type { RalphStateForHud, HudLabels, HudThresholds } from '../types.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
-
-// ANSI color codes for inline use
-const RED = '\x1b[31m';
-const YELLOW = '\x1b[33m';
-const GREEN = '\x1b[32m';
+import { RESET, STATUS } from '../colors.js';
 
 /**
  * Render Ralph loop state.
@@ -34,11 +29,11 @@ export function renderRalph(
 
   let color: string;
   if (iteration >= criticalThreshold) {
-    color = RED;
+    color = STATUS.critical;
   } else if (iteration >= warningThreshold) {
-    color = YELLOW;
+    color = STATUS.warn;
   } else {
-    color = GREEN;
+    color = STATUS.ok;
   }
 
   return `${labels.ralph}:${color}${iteration}/${maxIterations}${RESET}`;

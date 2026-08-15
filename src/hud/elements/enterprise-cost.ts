@@ -6,21 +6,16 @@
  */
 
 import type { RateLimits } from '../types.js';
-import { RESET } from '../colors.js';
+import { RESET, DIM, STATUS, PERCENT_WARN, PERCENT_CRITICAL } from '../colors.js';
 
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
-const DIM = '\x1b[2m';
-
-// Thresholds matching limits.ts for consistency
-const WARNING_THRESHOLD = 70;
-const CRITICAL_THRESHOLD = 90;
+// 阈值单一来源（P0-1）：与 context/limits/payload 共用 colors.ts 统一百分比阈值
+const WARNING_THRESHOLD = PERCENT_WARN;
+const CRITICAL_THRESHOLD = PERCENT_CRITICAL;
 
 function getColor(percent: number): string {
-  if (percent >= CRITICAL_THRESHOLD) return RED;
-  if (percent >= WARNING_THRESHOLD) return YELLOW;
-  return GREEN;
+  if (percent >= CRITICAL_THRESHOLD) return STATUS.critical;
+  if (percent >= WARNING_THRESHOLD) return STATUS.warn;
+  return STATUS.ok;
 }
 
 /**

@@ -41,6 +41,7 @@ import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
 import type {
   HudRenderContext,
+  HudThresholds,
   RateLimits,
   SessionHealth,
   SessionSummaryState,
@@ -200,16 +201,20 @@ function spawnSessionSummaryScript(
 
 /**
  * Calculate session health from session start time and context usage.
+ * 阈值复用 config.thresholds（P0-1 / P2-13），消除魔法数字与双套逻辑：
+ * - 时长 >120m 或 context ≥ contextCritical → critical
+ * - 时长 >60m 或 context ≥ contextWarning → warning
  */
 async function calculateSessionHealth(
   sessionStart: Date | undefined,
   contextPercent: number,
+  thresholds: HudThresholds,
 ): Promise<SessionHealth | null> {
   const durationMs = sessionStart ? Date.now() - sessionStart.getTime() : 0;
   const durationMinutes = Math.floor(durationMs / 60_000);
   let health: SessionHealth["health"] = "healthy";
-  if (durationMinutes > 120 || contextPercent > 85) health = "critical";
-  else if (durationMinutes > 60 || contextPercent > 70) health = "warning";
+  if (durationMinutes > 120 || contextPercent >= thresholds.contextCritical) health = "critical";
+  else if (durationMinutes > 60 || contextPercent >= thresholds.contextWarning) health = "warning";
   return { durationMinutes, messageCount: 0, health };
 }
 
@@ -388,6 +393,9 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
         );
       } catch {
         // 锁争用降级:无锁写入,避免阻塞 HUD 渲染
+        if (process.env.OMC_DEBUG) {
+          console.error('[HUD] State lock contention, falling back to unlocked write');
+        }
         persistSessionStart();
       }
     }
@@ -507,7 +515,11 @@ async function main(watchMode = false, skipInit = false): Promise<void> {
       customBuckets,
       pendingPermission: transcriptData.pendingPermission || null,
       thinkingState: transcriptData.thinkingState || null,
-      sessionHealth: await calculateSessionHealth(sessionStart, contextPercent),
+      sessionHealth: await calculateSessionHealth(
+        sessionStart,
+        contextPercent,
+        config.thresholds,
+      ),
       lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
       sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
       omcVersion,

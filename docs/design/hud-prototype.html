@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<!--
+  OMC HUD 模块 · 优化后 UI 终端仿真原型
+  ==================================================
+  设计系统：Linear Pulse（03-design-system.md v1.0）
+  构建者：原型构建师（筑原型 Zhu）· prototype-builder
+  说明：本原型为"优化后"UI 的静态仿真，演示 5 预设 × 2 主题 × 2 宽度 × 2 safeMode 的关键场景。
+       演示数据均为虚构稳定快照。无第三方依赖，纯原生 HTML/CSS/JS，双击即可打开。
+  关键映射（03-design-system.md §3.1）：
+    30/37 .fg-default  #E6EDF3/#24292F     31 .fg-red    #F85149/#CF222E
+    32    .fg-green    #3FB950/#1A7F37     33 .fg-yellow #D29922/#9A6700
+    34    .fg-blue     #4493F8/#0969DA     36 .fg-cyan   #39C5CF/#0B7285
+    94    .fg-bright-blue #58A6FF/#0550AE  96 .fg-bright-cyan #39C5CF/#0B7285
+    1     .fg-bold (700)                    2 .fg-dim  (opacity .55)
+    背景  .bg #0D1117/#F6F8FA
+  ==================================================
+-->
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMC HUD · 优化后终端状态栏原型（Linear Pulse）</title>
+<style>
+/* ============ 基础 / 主题变量（03 §3.1 ANSI→CSS 映射） ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --page-bg:#0B0F14; --card:#11161D; --border:#2A313A;
+  --text:#C9D1D9; --muted:#8B949E;
+  /* 终端画布（深色） */
+  --bg:#0D1117; --fg:#E6EDF3;
+  --red:#F85149; --green:#3FB950; --yellow:#D29922;
+  --blue:#4493F8; --cyan:#39C5CF; --bb:#58A6FF;
+}
+[data-theme="light"]{
+  --page-bg:#F6F8FA; --card:#FFFFFF; --border:#D0D7DE;
+  --text:#24292F; --muted:#57606A;
+  /* 终端画布（浅色） */
+  --bg:#F6F8FA; --fg:#24292F;
+  --red:#CF222E; --green:#1A7F37; --yellow:#9A6700;
+  --blue:#0969DA; --cyan:#0B7285; --bb:#0550AE;
+}
+html{transition:background .15s}
+body{
+  background:var(--page-bg); color:var(--text);
+  font-family:'JetBrains Mono','SF Mono','Cascadia Code','Consolas',monospace;
+  font-size:14px; line-height:1.6;
+  padding:34px 20px 70px;
+}
+.wrap{max-width:1140px;margin:0 auto}
+h1{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:6px 0 22px;font-size:13px}
+h2{font-size:16px;margin:0 0 12px}
+
+/* ============ 控制条 ============ */
+.controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-start;margin-bottom:18px}
+.ctrl-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);padding:6px;border-radius:9px}
+.ctrl-label{color:var(--muted);font-size:12px;padding:0 4px}
+button.btn{
+  font:inherit;font-size:12.5px;color:var(--text);background:transparent;
+  border:1px solid var(--border);border-radius:6px;padding:5px 11px;cursor:pointer;
+  transition:border-color .12s,color .12s,background .12s;
+}
+button.btn:hover{border-color:var(--muted)}
+button.btn.active{border-color:var(--bb);color:var(--bb)}
+button.btn.primary{border-color:var(--bb);color:var(--bb)}
+button.btn.primary:hover{background:color-mix(in srgb,var(--bb) 12%,transparent)}
+
+/* ============ 终端画布（03 §3.1） ============ */
+.term{background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+[data-theme="light"] .term{box-shadow:0 10px 26px rgba(31,35,40,.12)}
+.term-head{display:flex;align-items:center;gap:7px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--border)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.dot.r{background:#FF5F57}.dot.y{background:#FEBC2E}.dot.g{background:#28C840}
+.term-title{color:var(--muted);font-size:12px;margin-left:6px}
+.term-meta{margin-left:auto;color:var(--muted);font-size:11px}
+.term-body{padding:15px 18px 17px;font-size:13.5px;line-height:1.62;overflow-x:auto}
+.term-body.wide{width:120ch;max-width:100%}
+.term-body.narrow{width:60ch;max-width:100%}
+.hud-caption{color:var(--muted);font-size:11.5px;margin-bottom:10px}
+.hud-sep{height:1px;background:var(--border);margin-bottom:13px;opacity:.7}
+.hud-row{white-space:pre;min-height:1.4em}
+
+/* ============ ANSI→CSS 语义类（03 §3.1） ============ */
+.d{opacity:.55}                 /* fg-dim (2)   */
+.g{color:var(--green)}          /* fg-green (32) status.success */
+.y{color:var(--yellow)}         /* fg-yellow (33) status.warning */
+.r{color:var(--red)}            /* fg-red (31) status.critical */
+.b{color:var(--blue)}           /* fg-blue (34) tier.sonnet */
+.bb{color:var(--bb)}            /* fg-bright-blue (94) tier.opus */
+.c{color:var(--cyan)}           /* fg-cyan (36) tier.haiku / status.info */
+.bld{font-weight:700}           /* fg-bold (1) — 仅 §2.5 白名单三类 */
+
+/* ============ 演示卡片 ============ */
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:780px){.panels{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.card h3{font-size:13.5px;margin-bottom:10px}
+.card p{font-size:12.5px;color:var(--text);margin-bottom:6px}
+.hue-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.hue-tag{color:var(--muted);font-size:12px;min-width:9em}
+.sw{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12.5px;border:1px solid var(--border)}
+.sw.bb{color:var(--bb);border-color:var(--bb)}
+.sw.b{color:var(--blue);border-color:var(--blue)}
+.sw.c{color:var(--cyan);border-color:var(--cyan)}
+.sw.g{color:var(--green);border-color:var(--green)}
+.sw.y{color:var(--yellow);border-color:var(--yellow)}
+.sw.r{color:var(--red);border-color:var(--red)}
+.hint{color:var(--muted);font-size:12px;margin-top:4px}
+code{background:rgba(127,127,127,.14);padding:1px 5px;border-radius:4px;font-size:12px}
+.note{margin-top:14px;color:var(--muted);font-size:12px;line-height:1.7}
+
+/* ============ 图例 / 表格 ============ */
+.legend{margin-top:30px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:22px}
+th,td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600;white-space:nowrap}
+td.sym{white-space:nowrap;font-weight:600}
+.tbl-caption{color:var(--muted);font-size:12px;margin:-10px 0 8px}
+.footer{margin-top:28px;color:var(--muted);font-size:11.5px;border-top:1px solid var(--border);padding-top:14px;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>OMC HUD · 优化后终端状态栏原型</h1>
+  <p class="sub">设计系统：Linear Pulse（03-design-system.md）· 一套语义，五档密度 · 消灭 P1-01/03/04/05/07/08/09/10/11/12/13</p>
+
+  <!-- ============ 控制条 ============ -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <span class="ctrl-label">预设</span>
+      <button class="btn" data-preset="minimal">minimal</button>
+      <button class="btn active" data-preset="focused">focused</button>
+      <button class="btn" data-preset="full">full</button>
+      <button class="btn" data-preset="opencode">opencode</button>
+      <button class="btn" data-preset="dense">dense</button>
+    </div>
+    <div class="ctrl-group">
+      <button class="btn" id="themeBtn">主题：深色</button>
+      <button class="btn" id="widthBtn">宽度：120 列</button>
+      <button class="btn" id="safeBtn">safeMode：关</button>
+      <button class="btn primary" id="ctxBtn">ctx：67%（正常）</button>
+      <button class="btn" id="watchBtn">模拟 --watch：关</button>
+    </div>
+  </div>
+
+  <!-- ============ 终端画布 ============ -->
+  <div class="term">
+    <div class="term-head">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">OMC HUD — 终端仿真画布</span>
+      <span class="term-meta" id="termMeta">ANSI SGR 子集 · 无真彩</span>
+    </div>
+    <div class="term-body wide" id="termBody"></div>
+  </div>
+  <div class="note" id="note"></div>
+
+  <!-- ============ 核心演示卡片 ============ -->
+  <div class="panels">
+    <div class="card">
+      <h3>状态色 vs 档位色 —— 色相不相交（R-COLOR-1，灭 P1-08）</h3>
+      <div class="hue-row"><span class="hue-tag">档位色（冷系·模型能力）</span>
+        <span class="sw bb">Opus</span><span class="sw b">Sonnet</span><span class="sw c">Haiku</span>
+      </div>
+      <div class="hue-row"><span class="hue-tag">状态色（暖系·健康程度）</span>
+        <span class="sw g">ctx 45%</span><span class="sw y">ctx 75%</span><span class="sw r">ctx 95%</span>
+      </div>
+      <p class="hint">档位色（蓝系：BRIGHT_BLUE/BLUE/CYAN）与状态色（暖系：GREEN/YELLOW/RED）色相完全不相交。原 Sonnet=黄 与警告同色的冲突已消除；tier.haiku=CYAN 与 status.info=BRIGHT_CYAN 禁止同现（R-COLOR-3）。</p>
+    </div>
+    <div class="card">
+      <h3>区域分隔层级（ioGrouping=on，灭 P1-10）</h3>
+      <p><code>I:</code> <code>O:</code> <code>S:</code> 区域标签（dim + 冒号）前置强化区域边界；</p>
+      <p>区域内元素用 <code>|</code>（L1 元素分隔，细线）；区域之间用 <code>╎</code>（L2 区域分隔，U+257E 粗实线，1 列）。</p>
+      <p class="hint">同 3 列宽，靠字形 + 区域标签区分层级。safeMode 下 <code>╎</code>→<code>|</code>，层级仅靠区域标签表达（R-SEP-4）。</p>
+    </div>
+  </div>
+
+  <!-- ============ 符号词典 / 图例 ============ -->
+  <section class="legend">
+    <h2>符号词典（权威图例 · 灭 P1-03 / P1-05 / P2-04）</h2>
+    <table>
+      <thead><tr><th>符号</th><th>权威含义</th><th>所在元素</th><th>safeMode / ASCII</th><th>冲突处置</th></tr></thead>
+      <tbody>
+        <tr><td class="sym">Tl: Ag: Sk:</td><td>tool / agent / skill 调用计数</td><td>callCounts（ASCII）</td><td>不变</td><td>替代原 <code>T/A/S</code>，消除与 agent 编码冲突（P1-03）</td></tr>
+        <tr><td class="sym">🔧 🤖 ⚡</td><td>同上（emoji）</td><td>callCounts（emoji）</td><td><code>Tl:</code> <code>Ag:</code> <code>Sk:</code></td><td>宽度 2 列；safeMode 回退 3 列</td></tr>
+        <tr><td class="sym">A-Z / a-z</td><td>agent 类型编码（大写=Opus 档）</td><td>agents（codes）</td><td>不变</td><td>高级可选格式；默认预设不用 codes（P1-02）</td></tr>
+        <tr><td class="sym">!</td><td>异常 / 需注意（git modified、警告、bg 失败徽标）</td><td>git / contextWarning / background</td><td><code>!</code></td><td>agent 超时禁用 <code>!</code>（改用 ⏱）</td></tr>
+        <tr><td class="sym">?</td><td>git untracked</td><td>git</td><td><code>?</code></td><td>唯一含义</td></tr>
+        <tr><td class="sym">+</td><td>git staged</td><td>git</td><td><code>+</code></td><td>唯一含义；agent 超时禁用 <code>+</code></td></tr>
+        <tr><td class="sym">⇡ ⇣</td><td>git ahead / behind（版本漂移）</td><td>git</td><td><code>^</code> <code>v</code>（§2.7 宽度表）</td><td>与 token 方向箭语义区分（R-SYM-4）</td></tr>
+        <tr><td class="sym">↑ ↓</td><td>token 输入 / 输出流</td><td>token usage</td><td><code>↑</code> <code>↓</code></td><td>数据流方向语义；ioGrouping 下位于 I/O 区</td></tr>
+        <tr><td class="sym">r:</td><td>reasoning token</td><td>token usage</td><td><code>r:</code></td><td>带冒号自解释（修 P1-05）</td></tr>
+        <tr><td class="sym">tot:</td><td>session 累计 token</td><td>token usage</td><td><code>tot:</code></td><td>替代裸 <code>s</code>（修 P1-05）</td></tr>
+        <tr><td class="sym">*</td><td>数据过期（stale 缓存）</td><td>rate limits</td><td><code>*</code></td><td>图例文档化</td></tr>
+        <tr><td class="sym">~</td><td>重置时间近似</td><td>rate limits</td><td><code>~</code></td><td>图例文档化</td></tr>
+        <tr><td class="sym">⏱</td><td>计时 / 超时信号</td><td>promptTime、agent timeout</td><td><code>t:</code> 或省略</td><td>agent 超时改用此符号（修 P2-04）</td></tr>
+        <tr><td class="sym">⚠</td><td>警告 banner 标题</td><td>contextWarning / payloadWarning</td><td><code>!</code></td><td>详情行专用</td></tr>
+        <tr><td class="sym">█ ░</td><td>进度实心 / 空槽</td><td>contextBar / todosBar</td><td><code>#</code> <code>-</code></td><td>宽度 1 列（safeMode 等宽替代）</td></tr>
+        <tr><td class="sym">I: O: S:</td><td>区域标签（Input / Output / Status）</td><td>ioGrouping</td><td>不变</td><td>与 agent <code>S</code> 冲突靠 dim+冒号+区域分隔消歧</td></tr>
+        <tr><td class="sym">bg:</td><td>background 后台任务</td><td>background</td><td>不变</td><td>文档注明 bg=后台任务</td></tr>
+        <tr><td class="sym">L</td><td>本地安装包标记</td><td>omcLabel</td><td><code>L</code></td><td>版本后缀</td></tr>
+        <tr><td class="sym">… (+N lines)</td><td>折叠指示（maxOutputLines 超限）</td><td>任意（ROB-6）</td><td>不变</td><td>表示被折叠的行数</td></tr>
+      </tbody>
+    </table>
+
+    <h2>分隔符层级（R-SEP-1）</h2>
+    <table>
+      <thead><tr><th>层级</th><th>令牌</th><th>显示列宽</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>L1 元素分隔</td><td><code>dim(' | ')</code></td><td>3</td><td>元素边界（细线 <code>|</code>）</td></tr>
+        <tr><td>L2 区域分隔</td><td><code>dim(' ╎ ')</code>（U+257E，1 列）</td><td>3</td><td>I/O/S 区域边界（粗实线 <code>╎</code>，safeMode→<code>|</code>）</td></tr>
+        <tr><td>L3 内容内部</td><td><code>,</code> 或空格</td><td>1</td><td>agents 描述、git 状态、token 部件内部（wrap 安全，不拆元素）</td></tr>
+      </tbody>
+    </table>
+
+    <h2>标签语法 &amp; 阈值（R-LABEL-1 / R-THRESH-1）</h2>
+    <table>
+      <tbody>
+        <tr><th>标签语法（唯一）</th><td><code>dim(label:) + colored(value)</code> —— 标签永远 dim、冒号必带、无空格；值才着色；同一元素内不允许两个彩色标签（R-COLOR-2）。无标签例外：<code>[OMC]</code>、callCounts 图标、thinking 符号、区域标签 I:/O:/S:（R-LABEL-2）。</td></tr>
+        <tr><th>percent 阈值</th><td><code>THRESHOLDS.percent = { warn: 70, critical: 90 }</code> —— context / rate limits / enterprise cost / payload 共用（context 临界从 85 上调到 90，对齐 limits）。</td></tr>
+        <tr><th>进度色 ≠ 危险色</th><td>todos / background 容量：≥80% GREEN / ≥1% CYAN / 0 DIM（无黄，R-THRESH-2）。</td></tr>
+        <tr><th>时长异常</th><td>agent / session 时长：&lt;2m GREEN / 2-5m YELLOW / &gt;5m RED（R-THRESH-3）。</td></tr>
+        <tr><th>bold 白名单</th><td>仅 3 类：① update 提醒 ② warning banner 标题 ③ critical 关键值。一行 ≤1 处 bold；<code>[OMC]</code> 品牌非 bold（R-WEIGHT-1/3）。</td></tr>
+        <tr><th>动作词统一</th><td><code>COMPRESS?</code> → <code>ctx:82%! compact</code>，与详情行 <code>run /compact</code> 同一动作词（R-LABEL-4，灭 P1-04）。</td></tr>
+      </tbody>
+    </table>
+
+    <h2>密度档位（R-DENSITY-1，灭 P1-01）</h2>
+    <table>
+      <thead><tr><th>预设</th><th>主行预算</th><th>maxOutputLines</th><th>主行元素（默认顺序）</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><b>minimal</b></td><td>≤4</td><td>2</td><td>omcLabel, model, ctx, ralph</td><td>单行极简；agents=count</td></tr>
+        <tr><td><b>focused</b>（默认）</td><td>≤8</td><td>4</td><td>omcLabel, model, ctx, ralph, autopilot, prd, session, tokens</td><td>ioGrouping=on；agents=multiline(3)</td></tr>
+        <tr><td><b>full</b></td><td>≤12</td><td>12</td><td>核心全部 + rateLimits + background + git</td><td>高密度；agents=multiline(10)</td></tr>
+        <tr><td><b>opencode</b></td><td>≤6</td><td>4</td><td>omcLabel, model, ctx, agents(codes), ralph, session</td><td>单字符流（配上方图例）；callCounts=off</td></tr>
+        <tr><td><b>dense</b></td><td>≤10</td><td>6</td><td>同 full 压缩（去 background 于主行）</td><td>高密度压缩；agents=multiline(5)</td></tr>
+      </tbody>
+    </table>
+    <p class="tbl-caption">R-DENSITY-2：callCounts（单调计数）默认 detail/off；promptTime（纯计时）默认 off，保留时加 <code>prompt:</code> 标签；profile 非 bold。<br>※ 原型落地注：§2.8 的 focused 主行推荐 8 项在 120 列内必 wrap 成两行；本原型按 Linear Pulse「减法」原则将默认 focused 主行收至 6 项（<code>autopilot</code>/<code>PRD</code> 移出，见 full/dense）以保持单行主行 —— 两者均满足 ≤8 密度预算。</p>
+  </section>
+
+  <div class="footer">
+    原型为设计演示，演示数据均为虚构稳定快照（context 67%/82%/92%、rate limits 45%/12%、agents architect·explore·executor、todos 2/5、session 45m、tokens ↑1.2k ↓345 r:89 tot:12.3k、ralph 3/10、autopilot planning、PRD US-002、callCounts Tl:42 Ag:7 Sk:3）。<br>
+    相关文档：01-requirements.md（红线）· 02-ui-review.md（17/25 审查）· 03-design-system.md（设计令牌，权威规格）。ANSI→CSS 映射见文件头注释与 03 §3.1。
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1. 状态 & 工具
+   ============================================================ */
+'use strict';
+const state = {
+  preset: 'focused',
+  theme: 'dark',
+  width: 120,
+  safe: false,
+  ctx: 67,          // 67 正常 / 82 压缩建议 / 92 临界
+  watch: false,
+  tick: 13,         // promptTime 秒数
+  timer: null
+};
+const CTX_SEQ = [67, 82, 92];
+const CTX_NAME = {67:'正常', 82:'压缩建议', 92:'临界'};
+
+const $ = s => document.querySelector(s);
+
+/* ---- 显示宽度计算（03 §2.7 R-WIDTH-1） ---- */
+function widthOf(str){
+  let w = 0;
+  for(const ch of str){
+    const cp = ch.codePointAt(0);
+    if(cp>=0x1100 && (cp<=0x115F||(cp>=0x2E80&&cp<=0xA4CF)||(cp>=0xAC00&&cp<=0xD7A3)||(cp>=0xF900&&cp<=0xFAFF)||(cp>=0xFE30&&cp<=0xFE4F)||(cp>=0xFF00&&cp<=0xFF60)||(cp>=0xFFE0&&cp<=0xFFE6))) w += 2; // CJK/全角
+    else if((cp>=0x1F000&&cp<=0x1FAFF)||(cp>=0x2600&&cp<=0x27BF)||(cp>=0x2B00&&cp<=0x2BFF)) w += 2; // emoji
+    else if((cp>=0x21A0&&cp<=0x21FF)||cp===0x23F1) w += 2; // ambiguous（⇡⇣↑↓⏱ 保守按 2）
+    else w += 1;
+  }
+  return w;
+}
+function plain(html){
+  const d = document.createElement('div'); d.innerHTML = html; return d.textContent;
+}
+/* 构建一个段：{html, w}，w 为显示列宽 */
+function seg(html){
+  return { html, w: widthOf(plain(html)) };
+}
+/* 语义着色（对应 ANSI SGR） */
+const C = {
+  d:  s => '<span class="d">' + s + '</span>',   // dim
+  g:  s => '<span class="g">' + s + '</span>',   // green
+  y:  s => '<span class="y">' + s + '</span>',   // yellow
+  r:  s => '<span class="r">' + s + '</span>',   // red
+  b:  s => '<span class="b">' + s + '</span>',   // blue
+  bb: s => '<span class="bb">' + s + '</span>',  // bright blue
+  c:  s => '<span class="c">' + s + '</span>',   // cyan
+  bld: s=> '<span class="bld">' + s + '</span>'  // bold
+};
+const label = s => C.d(s + ':');                 // R-LABEL-1：冒号必带、无空格
+
+/* ============================================================
+   2. 元素构建器（严格套用 dim(label:)+colored(value)）
+   ============================================================ */
+function pctColor(v){ return v>=90?'r':v>=70?'y':'g'; }   // THRESHOLDS.percent
+
+function omcLabel(){
+  // R-WEIGHT-3 品牌降权：[OMC] 默认前景非 bold；版本+本地标记 dim
+  return seg('<span>[OMC]</span> ' + C.d('#4.1.10 L'));
+}
+function modelEl(name, tier){
+  const cls = tier==='opus'?'bb':tier==='sonnet'?'b':tier==='haiku'?'c':'d';
+  return seg(label('Model') + C[cls](name));   // R-LABEL-3：标签 dim，值档位色
+}
+function ctxEl(withBar){
+  const v = state.ctx, col = pctColor(v);
+  let h = label('ctx') + C[col](v + '%');
+  if(v>=80 && v<90){            // R-LABEL-4：统一动作词 compact
+    h += C.y('!') + C.d(' compact');
+  } else if(v>=90){
+    h = label('ctx') + C.bld(C.r(v + '%'));    // bold 白名单③：critical 关键值
+  }
+  if(withBar) h += ' ' + barHtml(v, col);
+  return seg(h);
+}
+function barHtml(pct, col){
+  const filled = Math.round(pct/10);                 // 0..10
+  const f = state.safe ? '#'.repeat(filled) : '█'.repeat(filled);
+  const e = state.safe ? '-'.repeat(10-filled) : '░'.repeat(10-filled);
+  return '<span class="' + col + '">' + f + '</span>' + C.d(e);
+}
+function ralphEl(){
+  const ratio = 3/10;
+  const col = ratio>=0.9?'r':ratio>=0.7?'y':'g';
+  return seg(label('ralph') + C[col]('3/10'));
+}
+function sessionEl(){
+  // session 健康色复用 THRESHOLDS.percent（P2-13 修复）：ctx 驱动
+  const v = state.ctx, col = pctColor(v);
+  return seg(label('session') + C[col]('45m'));
+}
+function autopilotEl(){ return seg(label('autopilot') + 'planning'); }
+function prdEl(){ return seg(label('PRD') + 'US-002'); }          // P2-01：加前缀
+function tokIn(){ return seg(C.d('↑') + '1.2k'); }                 // ↑ token 输入流
+function tokOut(){ return seg(C.d('↓') + '345'); }                 // ↓ token 输出流
+function tokR(){ return seg(C.d('r:') + '89'); }                   // P1-05：r: 自解释
+function tokTot(){ return seg(C.d('tot:') + '12.3k'); }            // P1-05：tot: 替代裸 s
+function limitsEl(){
+  const c5 = pctColor(45), cw = pctColor(12);                       // 全 dim 标签（P2-02）
+  return seg(label('5h') + C[c5]('45%') + ' ' + label('wk') + C[cw]('12%'));
+}
+function thinkingEl(){
+  return seg(C.d('thinking'));    // thinkingFormat 默认 text，规避 💭（§2.7 注）
+}
+function backgroundEl(){
+  // R-THRESH-2：容量部分→CYAN；失败徽标红色 !N（P2-11 补齐）
+  return seg(label('bg') + C.c('3/5') + ' ' + C.r('!1'));
+}
+function callCountsEl(){
+  // R-LABEL-2：图标无标签；P1-03：emoji→Tl:/Ag:/Sk:
+  if(state.safe) return seg(C.d('Tl:') + '42 ' + C.d('Ag:') + '7 ' + C.d('Sk:') + '3');
+  return seg('🔧42 🤖7 ⚡3');
+}
+function promptEl(){ return seg(label('prompt') + state.tick + 's'); }   // P2-06：加标签
+function missionEl(){
+  return seg(label('mission') + 'US-002 ' + C.c('[running]') + ' · 2/5 done · 3 active');
+}
+function todosEl(){
+  const pct = 40, col = pct>=80?'g':pct>=1?'c':'d';                    // 进度色非危险色
+  return seg(label('todos') + C[col]('2/5') + ' ' + barHtml(pct,col) + ' ' + C.d('(40%)'));
+}
+function warningEl(){
+  const v = state.ctx, col = pctColor(v);
+  const ic = state.safe ? '!' : '⚠';
+  const dash = state.safe ? '-' : '—';
+  // bold 白名单②：warning banner 标题
+  return seg(C[col](ic) + ' ' + C.bld(C[col]('ctx ' + v + '%')) + ' ' + C.d(dash + ' run /compact'));
+}
+function gitUnits(){
+  const ah = state.safe ? '^' : '⇡', bh = state.safe ? 'v' : '⇣';
+  const items = [
+    [label('repo') + 'oh-my-claudecode', 'L1'],
+    [label('branch') + 'main', 'L1'],
+    [ah + '1 ' + bh + '2 ' + C.y('!3') + ' +2 ?1', 'L1'],
+    [label('profile') + 'default', null]                       // 非 bold（P1-11）
+  ];
+  return items.map(([html, sep]) => {
+    const u = seg(html);
+    u.sepAfter = sep; u.sepW = sep ? 3 : 0;
+    return u;
+  });
+}
+function agentsLine(){
+  const a = [
+    { name:'architect', model:'Opus',   tier:'bb' },
+    { name:'explore',   model:'Haiku',  tier:'c'  },
+    { name:'executor',  model:'Sonnet', tier:'b'  }
+  ];
+  const inner = a.map(x => x.name + '(' + C[x.tier](x.model) + ')').join(', ');  // L3：逗号
+  return seg(label('agents') + inner);
+}
+function agentsCodesEl(){
+  return seg(label('agents') + C.bb('A') + ' ' + C.c('e') + ' ' + C.b('x'));
+}
+function regionLabel(t){ return seg(C.d(t + ': ')); }
+
+/* ============================================================
+   3. 五档预设（03 §2.8 / §3.2 元素组合表）
+   每档：line1（git 行，可选） + main（主行）+ details（详情行，prio 越小越优先保留）
+   ============================================================ */
+function withSep(u, sep){ u.sepAfter = sep; u.sepW = sep ? 3 : 0; return u; }
+function buildMain(spec){
+  return spec.map(([fn, sep, key]) => {
+    const u = fn();
+    u.sepAfter = sep; u.sepW = sep ? 3 : 0; u.key = key;
+    return u;
+  });
+}
+
+const PRESETS = {
+  minimal: {
+    maxLines: 2,
+    meta: '主行 ≤4 · io off · agents count',
+    dropOrder: [],
+    line1: null,
+    mainSpec: [
+      [omcLabel, 'L1', 'omc'],
+      [() => modelEl('Opus', 'opus'), 'L1', 'model'],
+      [() => ctxEl(false), 'L1', 'ctx'],
+      [ralphEl, null, 'ralph']
+    ],
+    details(){
+      const d = [
+        { prio: 3, units: [withSep(todosEl(), 'L1'), withSep(limitsEl(), null)] }
+      ];
+      if(state.ctx >= 70) d.push({ prio: 1, units: [withSep(warningEl(), null)] });
+      return d;
+    }
+  },
+
+  focused: {
+    maxLines: 4,
+    meta: '主行 ≤6（减法保单行）· ioGrouping on · agents multiline(3)',
+    dropOrder: ['ralph', 'session', 'tktot'],
+    line1: () => gitUnits(),
+    mainSpec: [
+      [omcLabel, 'L1', 'omc'],
+      [() => regionLabel('I'), null, 'rlI'],
+      [() => ctxEl(false), 'L1', 'ctx'],
+      [tokIn, 'L2', 'tkin'],                    // I 区末元素 → L2 到 O 区
+      [() => regionLabel('O'), null, 'rlO'],
+      [tokOut, 'L1', 'tkout'],
+      [tokR, 'L2', 'tkr'],                      // O 区末元素 → L2 到 S 区
+      [() => regionLabel('S'), null, 'rlS'],
+      [() => modelEl('Opus', 'opus'), 'L1', 'model'],
+      [ralphEl, 'L1', 'ralph'],
+      [sessionEl, 'L1', 'session'],
+      [tokTot, null, 'tktot']
+    ],
+    details(){
+      const d = [
+        { prio: 2, units: [withSep(agentsLine(), null)] },
+        { prio: 3, units: [withSep(todosEl(), null)] }
+      ];
+      if(state.ctx >= 70) d.push({ prio: 1, units: [withSep(warningEl(), null)] });
+      return d;
+    }
+  },
+
+  full: {
+    maxLines: 12,
+    meta: '主行 ≤12 · ioGrouping on · agents multiline(10)',
+    dropOrder: ['thk', 'autopilot', 'prd', 'tktot', 'bg'],
+    line1: () => gitUnits(),
+    mainSpec: [
+      [omcLabel, 'L1', 'omc'],
+      [() => regionLabel('I'), null, 'rlI'],
+      [() => ctxEl(true), 'L1', 'ctx'],
+      [tokIn, 'L2', 'tkin'],                    // I 区末元素 → L2 到 O 区
+      [() => regionLabel('O'), null, 'rlO'],
+      [thinkingEl, 'L1', 'thk'],
+      [tokOut, 'L1', 'tkout'],
+      [tokR, 'L2', 'tkr'],                      // O 区末元素 → L2 到 S 区
+      [() => regionLabel('S'), null, 'rlS'],
+      [() => modelEl('Opus', 'opus'), 'L1', 'model'],
+      [ralphEl, 'L1', 'ralph'],
+      [autopilotEl, 'L1', 'autopilot'],
+      [prdEl, 'L1', 'prd'],
+      [sessionEl, 'L1', 'session'],
+      [limitsEl, 'L1', 'lim'],
+      [tokTot, 'L1', 'tktot'],
+      [backgroundEl, null, 'bg']
+    ],
+    details(){
+      const d = [
+        { prio: 2, units: [withSep(agentsLine(), null)] },
+        { prio: 3, units: [withSep(todosEl(), null)] },
+        { prio: 4, units: [withSep(callCountsEl(), null)] },
+        { prio: 5, units: [withSep(promptEl(), null)] },
+        { prio: 6, units: [withSep(missionEl(), null)] }
+      ];
+      if(state.ctx >= 70) d.push({ prio: 1, units: [withSep(warningEl(), null)] });
+      return d;
+    }
+  },
+
+  opencode: {
+    maxLines: 4,
+    meta: '主行 ≤6 · io off · agents codes',
+    dropOrder: ['ralph'],
+    line1: () => gitUnits(),
+    mainSpec: [
+      [omcLabel, 'L1', 'omc'],
+      [() => modelEl('Opus', 'opus'), 'L1', 'model'],
+      [() => ctxEl(false), 'L1', 'ctx'],
+      [agentsCodesEl, 'L1', 'agents'],
+      [ralphEl, 'L1', 'ralph'],
+      [sessionEl, null, 'session']
+    ],
+    details(){
+      return [{ prio: 2, units: [withSep(todosEl(), null)] }];
+    }
+  },
+
+  dense: {
+    maxLines: 6,
+    meta: '主行 ≤10 · ioGrouping on · agents multiline(5)',
+    dropOrder: ['thk', 'autopilot', 'prd', 'tktot'],
+    line1: () => gitUnits(),
+    mainSpec: [
+      [omcLabel, 'L1', 'omc'],
+      [() => regionLabel('I'), null, 'rlI'],
+      [() => ctxEl(false), 'L1', 'ctx'],
+      [tokIn, 'L2', 'tkin'],                    // I 区末元素 → L2 到 O 区
+      [() => regionLabel('O'), null, 'rlO'],
+      [thinkingEl, 'L1', 'thk'],
+      [tokOut, 'L1', 'tkout'],
+      [tokR, 'L2', 'tkr'],                      // O 区末元素 → L2 到 S 区
+      [() => regionLabel('S'), null, 'rlS'],
+      [() => modelEl('Opus', 'opus'), 'L1', 'model'],
+      [ralphEl, 'L1', 'ralph'],
+      [autopilotEl, 'L1', 'autopilot'],
+      [prdEl, 'L1', 'prd'],
+      [sessionEl, 'L1', 'session'],
+      [limitsEl, 'L1', 'lim'],
+      [tokTot, null, 'tktot']
+    ],
+    details(){
+      const d = [
+        { prio: 2, units: [withSep(agentsLine(), null)] },
+        { prio: 3, units: [withSep(todosEl(), null)] },
+        { prio: 4, units: [withSep(callCountsEl(), null)] },
+        { prio: 5, units: [withSep(backgroundEl(), null)] }
+      ];
+      if(state.ctx >= 70) d.push({ prio: 1, units: [withSep(warningEl(), null)] });
+      return d;
+    }
+  }
+};
+
+/* ============================================================
+   4. 渲染引擎（wrap 只按 L1/L2 切分；窄屏丢弃低价值元素保 detail）
+   ============================================================ */
+function sepHtml(level){
+  if(level === 'L2') return state.safe ? C.d(' | ') : C.d(' ╎ ');  // R-SEP-4：safeMode ╎→|
+  return C.d(' | ');
+}
+function wrapUnits(units, maxW){
+  const rows=[]; let cur=[], curW=0;
+  for(const u of units){
+    const total = u.w + (u.sepW || 0);
+    if(cur.length && curW + total > maxW){ rows.push(cur); cur=[]; curW=0; }
+    cur.push(u); curW += total;
+    if(curW > maxW && cur.length === 1){
+      const t = truncateUnit(u, maxW);
+      cur = [t]; curW = t.w + (t.sepW || 0);
+    }
+  }
+  if(cur.length) rows.push(cur);
+  return rows;
+}
+function truncateUnit(u, maxW){
+  if(u.w <= maxW) return u;                       // 单段超宽回退 truncate（render.ts:243-245）
+  const txt = plain(u.html);
+  let keep='', w=0, i=0;
+  while(i < txt.length){
+    const c = txt[i], cw = widthOf(c);
+    if(w + cw > maxW - 1) break;
+    keep += c; w += cw; i++;
+  }
+  return { html: keep + C.d('…'), w: w+1, sepAfter:u.sepAfter, sepW:u.sepW, key:u.key };
+}
+function renderRow(row){
+  let s='';
+  for(const u of row){ s += u.html; if(u.sepAfter) s += sepHtml(u.sepAfter); }
+  return '<div class="hud-row">' + s + '</div>';
+}
+function dropToFit(units, maxW, targetRows, dropOrder){
+  const dropped=[]; let rows=wrapUnits(units, maxW), k=0;
+  while(rows.length > targetRows && k < dropOrder.length){
+    const key = dropOrder[k++];
+    const idx = units.findIndex(u => u.key === key);
+    if(idx >= 0){ const rm = units.splice(idx, 1); dropped.push(rm[0]); }
+    rows = wrapUnits(units, maxW);
+  }
+  return { rows, dropped };
+}
+
+function layout(){
+  const p = PRESETS[state.preset];
+  const maxW = state.width, maxLines = p.maxLines;
+
+  /* details：按 prio 排序，预留给主行 1 行（R-DENSITY-4 保 detail） */
+  const details = p.details().sort((a,b) => a.prio - b.prio);
+  const detailRows=[]; let budget = maxLines - 1;
+  for(const d of details){
+    if(budget <= 0) break;
+    const rows = wrapUnits(d.units, maxW);
+    if(rows.length > budget) break;
+    detailRows.push(...rows); budget -= rows.length;
+  }
+
+  /* main：窄屏按 dropOrder 丢弃低价值元素（R-DENSITY-4，保 detail） */
+  let mainUnits = buildMain(p.mainSpec);
+  let dropped=[], mainRows;
+  if(state.width < 120){
+    const target = Math.max(1, maxLines - detailRows.length - 1);  // 给 line1 预留 1 行
+    const res = dropToFit(mainUnits, maxW, target, p.dropOrder);
+    mainRows = res.rows; dropped = res.dropped;
+  } else {
+    mainRows = wrapUnits(mainUnits, maxW);
+  }
+
+  /* line1：git 行（窄屏先丢 profile；整体超预算则整行丢弃 —— git 属"其余"优先级） */
+  let line1Units = p.line1 ? p.line1() : [];
+  if(state.width < 120){
+    const pi = line1Units.findIndex(u => u.html.indexOf('profile:') >= 0);
+    if(pi >= 0) line1Units.splice(pi, 1);
+  }
+  let line1Rows = wrapUnits(line1Units, maxW);
+  const avail = maxLines - detailRows.length;
+  if(line1Rows.length + mainRows.length > avail) line1Rows = [];
+
+  /* 组装 + 折叠（ROB-6：... (+N lines)） */
+  let used=0, html='';
+  for(const r of line1Rows){ if(used>=maxLines) break; html+=renderRow(r); used++; }
+  for(const r of mainRows){ if(used>=maxLines) break; html+=renderRow(r); used++; }
+  if(dropped.length && used<maxLines){ html+='<div class="hud-row d">…</div>'; used++; }  // 丢弃标记计预算
+  for(const r of detailRows){ if(used>=maxLines) break; html+=renderRow(r); used++; }
+  const folded = (line1Rows.length + mainRows.length + detailRows.length + (dropped.length?1:0)) - used;
+  if(folded > 0) html += '<div class="hud-row d">… (+' + folded + ' lines)</div>';
+  return { html, dropped, mainRows };
+}
+
+function noteText(p, dropped){
+  const parts=[];
+  parts.push('预设 ' + state.preset + '：' + p.meta);
+  if(state.preset==='focused'||state.preset==='full'||state.preset==='dense')
+    parts.push('ioGrouping=on：区域标签 I:/O:/S: + L2 分隔符 ╎ 强化区域边界；区域内元素用 L1 |（R-SEP-1/2）');
+  if(state.preset==='focused')
+    parts.push('focused 主行按 Linear Pulse 减法收至 6 项保单行（autopilot/PRD 语法见 full/dense，均可配置开启）');
+  if(state.width===60){
+    parts.push('窄屏 60 列：wrap 只按 L1/L2 分隔符切分、元素内部不拆（R-SEP-3）' +
+      (dropped.length ? '；丢弃低价值元素：' + dropped.map(u=>u.key).join(', ') : '') + '（R-DENSITY-4）');
+  }
+  if(state.safe) parts.push('safeMode：emoji/ambiguous 已替换为确定宽度 ASCII（§2.7 R-WIDTH-3）');
+  if(state.ctx>=70) parts.push('ctx≥70：状态色转黄/红 + 动作词 compact 提示（R-THRESH-1/4）');
+  return parts.map(x => '· ' + x).join('<br>');
+}
+
+function render(){
+  const p = PRESETS[state.preset];
+  const res = layout();
+  const caption = '[OMC] HUD v4.1.10 | preset: ' + state.preset + ' | ' + p.meta +
+    ' | maxWidth: ' + state.width + ' | safeMode: ' + (state.safe?'on':'off') +
+    ' | ctx: ' + state.ctx + '%' + (state.watch ? ' | tick: ' + state.tick + 's' : '');
+  $('#termBody').innerHTML =
+    '<div class="hud-caption d">' + caption + '</div><div class="hud-sep"></div>' + res.html;
+  $('#note').innerHTML = noteText(p, res.dropped);
+  $('#termMeta').textContent = 'ctx:' + state.ctx + '% · 主题:' + (state.theme==='dark'?'深':'浅') +
+    ' · safeMode:' + (state.safe?'on':'off') + (state.watch?' · watch:on':'');
+}
+
+/* ============================================================
+   5. 控制 & 初始化
+   ============================================================ */
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.preset = btn.dataset.preset;
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('active', b===btn));
+    render();
+  });
+});
+$('#themeBtn').addEventListener('click', () => {
+  state.theme = state.theme==='dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = state.theme;
+  $('#themeBtn').textContent = '主题：' + (state.theme==='dark' ? '深色' : '浅色');
+  render();
+});
+$('#widthBtn').addEventListener('click', () => {
+  state.width = state.width===120 ? 60 : 120;
+  $('#widthBtn').textContent = '宽度：' + state.width + ' 列';
+  const tb = $('#termBody');
+  tb.classList.toggle('wide', state.width===120);
+  tb.classList.toggle('narrow', state.width===60);
+  render();
+});
+$('#safeBtn').addEventListener('click', () => {
+  state.safe = !state.safe;
+  $('#safeBtn').textContent = 'safeMode：' + (state.safe?'开':'关');
+  render();
+});
+$('#ctxBtn').addEventListener('click', () => {
+  const i = CTX_SEQ.indexOf(state.ctx);
+  state.ctx = CTX_SEQ[(i+1) % CTX_SEQ.length];
+  $('#ctxBtn').textContent = 'ctx：' + state.ctx + '%（' + CTX_NAME[state.ctx] + '）';
+  render();
+});
+$('#watchBtn').addEventListener('click', () => {
+  state.watch = !state.watch;
+  $('#watchBtn').textContent = '模拟 --watch：' + (state.watch?'开':'关');
+  if(state.watch){
+    state.tick = 13;
+    state.timer = setInterval(() => { state.tick++; render(); }, 1000);
+  } else {
+    clearInterval(state.timer); state.timer = null; state.tick = 13;
+  }
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

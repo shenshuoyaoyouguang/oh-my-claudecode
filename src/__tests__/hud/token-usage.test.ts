@@ -167,13 +167,14 @@ describe("HUD token usage rendering", () => {
     expect(stripped).toBe("↑1.5k ↓987");
   });
 
-  it("includes reasoning (magenta r) and session total (cyan s) when available", () => {
+  it("includes reasoning (magenta r:) and session total (cyan tot:) when available", () => {
     const out = renderTokenUsage(
       { inputTokens: 1530, outputTokens: 987, reasoningTokens: 321 },
       8765,
     );
     const stripped = out!.replace(/\x1b\[[0-9;]*m/g, "");
-    expect(stripped).toBe("↑1.5k ↓987 r321 s8.8k");
+    // P0-3：r→r:、s→tot:（带冒号自解释前缀）
+    expect(stripped).toBe("↑1.5k ↓987 r:321 tot:8.8k");
     // reasoning uses magenta, session uses cyan
     expect(out).toContain("\x1b[35m");
     expect(out).toContain("\x1b[36m");
@@ -189,8 +190,9 @@ describe("HUD token usage rendering", () => {
       (p ?? "").replace(/\x1b\[[0-9;]*m/g, "");
     expect(strip(parts!.input)).toBe("↑1.5k");
     expect(strip(parts!.output)).toBe("↓987");
-    expect(strip(parts!.reasoning)).toBe("r321");
-    expect(strip(parts!.session)).toBe("s8.8k");
+    // P0-3：r→r:、s→tot:
+    expect(strip(parts!.reasoning)).toBe("r:321");
+    expect(strip(parts!.session)).toBe("tot:8.8k");
   });
 
   it("returns null from splitTokenUsage when no usage is available", () => {

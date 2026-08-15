@@ -51,6 +51,14 @@ describe('model element', () => {
       expect(formatModelName('claude-opus-4-8-20260528', 'full')).toBe('claude-opus-4-8-20260528');
     });
 
+    it('formats common external models with friendly family names', () => {
+      expect(formatModelName('deepseek-v4-flash', 'versioned')).toBe('DeepSeek V4');
+      expect(formatModelName('deepseek-reasoner', 'versioned')).toBe('DeepSeek');
+      expect(formatModelName('gpt-4o', 'versioned')).toBe('GPT 4o');
+      expect(formatModelName('qwen-max', 'versioned')).toBe('Qwen Max');
+      expect(formatModelName('gemini-2.5-pro', 'versioned')).toBe('Gemini 2.5 Pro');
+    });
+
     it('truncates long unrecognized model names', () => {
       const longName = 'some-very-long-model-name-that-exceeds-limit';
       expect(formatModelName(longName)?.length).toBeLessThanOrEqual(20);
@@ -58,28 +66,31 @@ describe('model element', () => {
   });
 
   describe('renderModel', () => {
+    // P0-2：标签 dim + 值用档位色，ANSI 断言需剥离转义后检查文本
+    const strip = (s: string | null): string => (s ?? '').replace(/\x1b\[[0-9;]*m/g, '');
+
     it('renders formatted model name', () => {
       const result = renderModel('claude-opus-4-8-20260528');
       expect(result).not.toBeNull();
-      expect(result).toContain('Model: Opus 4.8');
+      expect(strip(result)).toContain('Model: Opus 4.8');
     });
 
     it('renders versioned format', () => {
       const result = renderModel('claude-opus-4-8-20260528', 'versioned');
       expect(result).not.toBeNull();
-      expect(result).toContain('Model: Opus 4.8');
+      expect(strip(result)).toContain('Model: Opus 4.8');
     });
 
     it('renders full format', () => {
       const result = renderModel('claude-opus-4-8-20260528', 'full');
       expect(result).not.toBeNull();
-      expect(result).toContain('Model: claude-opus-4-8');
+      expect(strip(result)).toContain('Model: claude-opus-4-8');
     });
 
     it('renders configured model label', () => {
       const result = renderModel('Claude Sonnet 4.5', 'versioned', { model: '模型' });
       expect(result).not.toBeNull();
-      expect(result).toContain('模型: Sonnet 4.5');
+      expect(strip(result)).toContain('模型: Sonnet 4.5');
     });
 
     it('returns null for null input', () => {

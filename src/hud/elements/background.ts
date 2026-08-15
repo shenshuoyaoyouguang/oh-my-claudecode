@@ -5,16 +5,9 @@
  */
 
 import type { BackgroundTask, HudLabels } from '../types.js';
-import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
+import { DEFAULT_HUD_LABELS, MAX_BACKGROUND_CONCURRENT } from '../types.js';
+import { RESET, PROGRESS, DIM } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
-
-const CYAN = '\x1b[36m';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const DIM = '\x1b[2m';
-
-const MAX_CONCURRENT = 5;
 
 /**
  * Render background task count.
@@ -32,17 +25,17 @@ export function renderBackground(
     return null;
   }
 
-  // Color based on capacity usage
+  // 容量/进度色（R-THRESH-2，P0-1）：满=GREEN、近满=CYAN、有余=DIM —— 不表达"危险"，不使用状态黄
   let color: string;
-  if (running >= MAX_CONCURRENT) {
-    color = YELLOW; // At capacity
-  } else if (running >= MAX_CONCURRENT - 1) {
-    color = CYAN; // Near capacity
+  if (running >= MAX_BACKGROUND_CONCURRENT) {
+    color = PROGRESS.good; // At capacity
+  } else if (running >= MAX_BACKGROUND_CONCURRENT - 1) {
+    color = PROGRESS.partial; // Near capacity
   } else {
-    color = GREEN; // Plenty of room
+    color = PROGRESS.empty; // Plenty of room
   }
 
-  return `${labels.background}:${color}${running}/${MAX_CONCURRENT}${RESET}`;
+  return `${labels.background}:${color}${running}/${MAX_BACKGROUND_CONCURRENT}${RESET}`;
 }
 
 /**
@@ -60,14 +53,14 @@ export function renderBackgroundDetailed(
     return null;
   }
 
-  // Color based on capacity
+  // 容量/进度色（R-THRESH-2，P0-1）：满=GREEN、近满=CYAN、有余=DIM
   let color: string;
-  if (running.length >= MAX_CONCURRENT) {
-    color = YELLOW;
-  } else if (running.length >= MAX_CONCURRENT - 1) {
-    color = CYAN;
+  if (running.length >= MAX_BACKGROUND_CONCURRENT) {
+    color = PROGRESS.good;
+  } else if (running.length >= MAX_BACKGROUND_CONCURRENT - 1) {
+    color = PROGRESS.partial;
   } else {
-    color = GREEN;
+    color = PROGRESS.empty;
   }
 
   // Get short descriptions
@@ -82,5 +75,5 @@ export function renderBackgroundDetailed(
   });
 
   const suffix = running.length > 3 ? ',+' + (running.length - 3) : '';
-  return `${labels.background}:${color}${running.length}/${MAX_CONCURRENT}${RESET} ${DIM}[${descriptions.join(',')}${suffix}]${RESET}`;
+  return `${labels.background}:${color}${running.length}/${MAX_BACKGROUND_CONCURRENT}${RESET} ${DIM}[${descriptions.join(',')}${suffix}]${RESET}`;
 }

@@ -28,6 +28,7 @@ import {
 } from './types.js';
 import { readHudConfig } from './state.js';
 import { lockPathFor, withFileLock, type FileLockOptions } from '../lib/file-lock.js';
+import { atomicWriteFileSync } from '../lib/atomic-write.js';
 
 // Cache configuration
 const CACHE_TTL_FAILURE_MS = 15 * 1000; // 15 seconds for non-transient failures
@@ -896,11 +897,10 @@ function writeBackCredentials(creds: OAuthCredentials): void {
       }
     }
 
-    // Write directly: writeFileSync is atomic on most platforms for single-file
-    // writes. The old tmp+rename pattern breaks on Windows (renameSync fails when
-    // target exists) and is unnecessary for a credentials file that is only written
-    // by this single process during token refresh.
-    writeFileSync(credPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
+    // 原子写:使用 atomicWriteFileSync (temp file + rename) 防止进程中断时
+    // 凭据文件被截断损坏。atomicWriteFileSync 内部使用 crypto.randomUUID()
+    // 生成临时文件名,避免了 Windows 上 renameSync 在目标存在时失败的问题。
+    atomicWriteFileSync(credPath, JSON.stringify(parsed, null, 2));
   } catch {
     // Silent failure - credential write-back is best-effort
     if (process.env.OMC_DEBUG) {

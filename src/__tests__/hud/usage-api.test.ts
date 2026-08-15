@@ -9,6 +9,7 @@ import * as childProcess from 'child_process';
 import * as os from 'os';
 import { EventEmitter } from 'events';
 import { isZaiHost, parseZaiResponse, isMinimaxHost, parseMinimaxResponse, getUsage, parseUsageResponse } from '../../hud/usage-api.js';
+import { atomicWriteFileSync } from '../../lib/atomic-write.js';
 
 // Mock file-lock so withFileLock always executes the callback (tests focus on routing, not locking)
 vi.mock('../../lib/file-lock.js', () => ({
@@ -36,6 +37,12 @@ vi.mock('fs', async (importOriginal) => {
     unlinkSync: vi.fn(),
   };
 });
+
+vi.mock('../../lib/atomic-write.js', () => ({
+  atomicWriteFileSync: vi.fn(),
+  atomicWriteJsonSync: vi.fn(),
+  atomicWriteSync: vi.fn(),
+}));
 
 vi.mock('child_process', () => ({
   execSync: vi.fn().mockImplementation(() => { throw new Error('mock: no keychain'); }),
@@ -1608,7 +1615,7 @@ describe('writeBackCredentials — Keychain vs file refresh', () => {
     expect(inner.refreshToken).toBe('new-refresh-token');
 
     // File credential store should NOT have been written
-    const fileWriteCall = vi.mocked(fs.writeFileSync).mock.calls.find(
+    const fileWriteCall = vi.mocked(atomicWriteFileSync).mock.calls.find(
       c => String(c[0]).endsWith('.credentials.json')
     );
     expect(fileWriteCall).toBeUndefined();
@@ -1678,11 +1685,11 @@ describe('writeBackCredentials — Keychain vs file refresh', () => {
     expect(result.error).toBeUndefined();
     expect(result.rateLimits?.fiveHourPercent).toBe(20);
 
-    // File should have been written with new tokens (direct write, no .tmp. pattern)
-    const fileWriteCall = vi.mocked(fs.writeFileSync).mock.calls.find(
+    // File should have been written atomically with new tokens
+    const fileWriteCall = vi.mocked(atomicWriteFileSync).mock.calls.find(
       c => String(c[0]).endsWith('.credentials.json')
     );
-    expect(fileWriteCall, 'writeFileSync should write directly to .credentials.json').toBeTruthy();
+    expect(fileWriteCall, 'atomicWriteFileSync should write to .credentials.json').toBeTruthy();
     const written = JSON.parse(String(fileWriteCall![1]));
     expect(written.claudeAiOauth.accessToken).toBe('new-file-access-token');
     expect(written.claudeAiOauth.refreshToken).toBe('new-file-refresh-token');
